@@ -1,0 +1,474 @@
+body[data-chat-mode="gal_chat"] {
+  width: 100vw;
+  max-width: none;
+  height: 100vh;
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  background: var(--theme-page-bg);
+}
+
+body[data-chat-mode="gal_chat"] .topbar-area {
+  position: fixed;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 40;
+  height: 4.5rem;
+}
+
+body[data-chat-mode="gal_chat"] .chat-header {
+  padding: 0.65rem 1rem;
+  transform: translateY(calc(-100% - 0.5rem));
+  transition: transform 160ms ease;
+  background: var(--theme-surface);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.25);
+}
+
+body[data-chat-mode="gal_chat"] .topbar-area.is-open .chat-header {
+  transform: translateY(0);
+}
+
+body[data-chat-mode="gal_chat"] .topbar-hint {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  height: 1.625rem;
+  color: white;
+  font-size: 1.35rem;
+  line-height: 1rem;
+  text-align: center;
+  letter-spacing: 0.2rem;
+  display: block;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  background: linear-gradient(
+    to bottom,
+    var(--theme-topbar-gradient),
+    transparent
+  );
+}
+
+body[data-chat-mode="gal_chat"] .topbar-area.is-open .topbar-hint {
+  opacity: 0;
+}
+
+body[data-chat-mode="gal_chat"] .gal-stage {
+  position: fixed;
+  z-index: 1;
+  display: block;
+  inset: 0;
+  overflow: hidden;
+}
+
+body[data-chat-mode="gal_chat"] .gal-background {
+  position: absolute;
+  z-index: 0;
+  inset: 0;
+  background-color: var(--theme-page-bg);
+  background-image:
+    linear-gradient(
+      rgba(255, 255, 255, var(--background-overlay-opacity)),
+      rgba(255, 255, 255, var(--background-overlay-opacity))
+    ),
+    var(--gal-background-image);
+  background-position: center center;
+  background-size: cover;
+}
+
+body[data-chat-mode="gal_chat"] #portrait {
+  position: absolute;
+  top: 20vh;
+  bottom: 0;
+  left: 50%;
+  z-index: 1;
+  display: block;
+  width: auto;
+  max-width: 92vw;
+  height: 80vh;
+  margin: 0;
+  transform: translateX(calc(-50% + var(--portrait-offset-x)))
+    translateY(var(--portrait-offset-y)) scale(var(--portrait-scale));
+  transform-origin: center bottom;
+  object-fit: contain;
+  object-position: center bottom;
+}
+
+body[data-chat-mode="gal_chat"] #portrait[hidden] {
+  display: none;
+}
+
+body[data-chat-mode="gal_chat"].portrait-layout-open #portrait:not([hidden]) {
+  filter: drop-shadow(0 0 5px var(--theme-accent));
+}
+
+body[data-chat-mode="gal_chat"] .portrait-layout-panel {
+  position: absolute;
+  top: 5.25rem;
+  right: 1.5rem;
+  z-index: 8;
+  width: 17rem;
+  padding: 0.85rem;
+  border: 1px solid var(--theme-border);
+  border-radius: 0.65rem;
+  color: var(--theme-text);
+  background: color-mix(in srgb, var(--theme-surface) 84%, transparent);
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.22);
+  backdrop-filter: blur(5px);
+}
+
+body[data-chat-mode="gal_chat"] .portrait-layout-panel[hidden] {
+  display: none;
+}
+
+.portrait-layout-heading,
+.portrait-step-selector,
+.portrait-layout-controls,
+.portrait-layout-actions {
+  display: flex;
+  align-items: center;
+}
+
+.portrait-layout-heading {
+  justify-content: space-between;
+  margin-bottom: 0.75rem;
+}
+
+.portrait-layout-heading span,
+.portrait-step-selector > span {
+  color: var(--theme-muted);
+  font-size: 0.86rem;
+}
+
+.portrait-step-selector {
+  gap: 0.35rem;
+  margin-bottom: 0.8rem;
+}
+
+.portrait-step-selector > span {
+  margin-right: auto;
+}
+
+.portrait-layout-panel button {
+  min-width: 2.25rem;
+  min-height: 2.15rem;
+  padding: 0.35rem 0.55rem;
+  border: 1px solid var(--theme-border);
+  border-radius: 0.4rem;
+  color: var(--theme-text);
+  font: inherit;
+  cursor: pointer;
+  background: color-mix(in srgb, var(--theme-soft) 88%, transparent);
+}
+
+.portrait-layout-panel button:not(:disabled):hover,
+.portrait-layout-panel button[aria-pressed="true"] {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent);
+}
+
+.portrait-layout-panel button[aria-pressed="true"] {
+  background: color-mix(in srgb, var(--theme-accent) 16%, transparent);
+}
+
+.portrait-layout-panel button:disabled {
+  cursor: wait;
+  opacity: 0.65;
+}
+
+.portrait-layout-controls {
+  justify-content: center;
+  gap: 1rem;
+}
+
+.portrait-direction-controls {
+  display: grid;
+  grid-template-columns: repeat(3, 2.45rem);
+  grid-template-rows: repeat(3, 2.25rem);
+  gap: 0.25rem;
+}
+
+.portrait-direction-controls [data-portrait-move="up"] {
+  grid-area: 1 / 2;
+}
+
+.portrait-direction-controls [data-portrait-move="left"] {
+  grid-area: 2 / 1;
+}
+
+.portrait-direction-controls [data-portrait-move="right"] {
+  grid-area: 2 / 3;
+}
+
+.portrait-direction-controls [data-portrait-move="down"] {
+  grid-area: 3 / 2;
+}
+
+.portrait-scale-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.portrait-scale-controls button {
+  width: 3rem;
+  font-size: 1.2rem;
+}
+
+.portrait-layout-actions {
+  justify-content: flex-end;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.portrait-layout-panel button.primary {
+  border-color: var(--theme-accent);
+  color: var(--theme-accent-contrast);
+  background: var(--theme-accent);
+}
+
+.portrait-layout-panel button.primary:not(:disabled):hover {
+  color: var(--theme-accent-contrast);
+  background: var(--theme-accent-hover);
+}
+
+.portrait-layout-status {
+  min-height: 1rem;
+  margin: 0.45rem 0 0;
+  color: var(--theme-muted);
+  font-size: 0.82rem;
+  line-height: 1.25;
+}
+
+body[data-chat-mode="gal_chat"] .gal-dialogue {
+  position: absolute;
+  right: 9vw;
+  bottom: 5.8rem;
+  left: 9vw;
+  z-index: 3;
+  min-height: 8.5rem;
+  max-width: 920px;
+  margin: 0 auto;
+  padding: 0.8rem 1.15rem 1rem;
+  border: 1px solid var(--theme-border);
+  border-radius: 0.6rem;
+  color: var(--theme-gal-text);
+  background: var(--theme-gal-dialogue);
+  box-shadow: 0 5px 18px rgba(0, 0, 0, 0.16);
+}
+
+body[data-chat-mode="gal_chat"] .gal-dialogue-header {
+  display: flex;
+  min-height: 2rem;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 650;
+}
+
+body[data-chat-mode="gal_chat"] #galDialogueSpeaker {
+  color: var(--theme-accent);
+}
+
+body[data-chat-mode="gal_chat"] .gal-dialogue-text {
+  display: flex;
+  min-height: 4.5rem;
+  align-items: center;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.7;
+}
+
+body[data-chat-mode="gal_chat"] .history-open-button {
+  display: inline-flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 50%;
+  color: var(--theme-text);
+  cursor: pointer;
+  background: rgba(0, 0, 0, 0.06);
+}
+
+body[data-chat-mode="gal_chat"] .history-open-button:hover {
+  background: rgba(0, 0, 0, 0.12);
+}
+
+body[data-chat-mode="gal_chat"] .history-open-button svg {
+  width: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+}
+
+body[data-chat-mode="gal_chat"] #activityStatus,
+body[data-chat-mode="gal_chat"] .chat-composer {
+  position: fixed;
+  right: 12vw;
+  bottom: 1rem;
+  left: 12vw;
+  z-index: 6;
+  width: auto;
+  max-width: 760px;
+  min-height: 3.25rem;
+  margin: 0 auto;
+  padding: 0.65rem 0.9rem;
+  border: 1px solid var(--theme-border);
+  border-radius: 0.55rem;
+  color: var(--theme-text);
+  background: var(--theme-surface);
+  box-shadow: 0 3px 12px rgba(0, 0, 0, 0.2);
+}
+
+body[data-chat-mode="gal_chat"] #activityStatus {
+  align-items: center;
+  gap: 0.65rem;
+  font-size: 0.9rem;
+}
+
+body[data-chat-mode="gal_chat"] .chat-composer label {
+  display: none;
+}
+
+body[data-chat-mode="gal_chat"] #userInput {
+  padding: 0.65rem 0.8rem;
+  border: 1px solid var(--theme-border);
+  border-radius: 0.4rem;
+  color: var(--theme-text);
+  background: var(--theme-ai-bubble);
+}
+
+body[data-chat-mode="gal_chat"] #userInput:focus {
+  border-color: var(--theme-accent);
+  outline: none;
+}
+
+body[data-chat-mode="gal_chat"] #sendButton {
+  padding: 0.65rem 1rem;
+  border: 0;
+  border-radius: 0.4rem;
+  color: var(--theme-accent-contrast);
+  cursor: pointer;
+  background: var(--theme-accent);
+}
+
+body[data-chat-mode="gal_chat"] #sendButton:not(:disabled):hover {
+  background: var(--theme-accent-hover);
+}
+
+body[data-chat-mode="gal_chat"] #sendButton:disabled {
+  background: var(--theme-disabled);
+}
+
+body[data-chat-mode="gal_chat"][data-polling-status="busy"] .chat-composer,
+body[data-chat-mode="gal_chat"][data-polling-status="idle"] #activityStatus {
+  display: none;
+}
+
+body[data-chat-mode="gal_chat"][data-polling-status="busy"] #activityStatus,
+body[data-chat-mode="gal_chat"][data-polling-status="idle"] .chat-composer {
+  display: flex;
+}
+
+body[data-chat-mode="gal_chat"] .history-overlay {
+  position: fixed;
+  z-index: 50;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 5vh 7vw;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 120ms ease;
+  background: rgba(0, 0, 0, 0.24);
+}
+
+body[data-chat-mode="gal_chat"].gal-history-open .history-overlay {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+}
+
+body[data-chat-mode="gal_chat"] #chatHistory {
+  position: relative;
+  display: flex;
+  width: min(900px, 86vw);
+  height: min(82vh, 760px);
+  margin: 0;
+  flex-direction: column;
+  overflow: hidden;
+  color: var(--theme-text);
+  background: var(--theme-gal-history-surface);
+  border-color: var(--theme-border);
+  box-shadow: 0 8px 30px rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(3px);
+}
+
+body[data-chat-mode="gal_chat"] #historyList {
+  min-height: 0;
+  max-height: none;
+  padding-top: 2.25rem;
+  flex: 1;
+  background: var(--theme-gal-history-content);
+}
+
+body[data-chat-mode="gal_chat"] .history-speaker {
+  display: block;
+  margin-bottom: 0.25rem;
+  color: var(--theme-muted);
+  font-size: 0.82rem;
+}
+
+body[data-chat-mode="gal_chat"] .history-content {
+  display: inline-block;
+  padding: 0.55rem 0.7rem;
+  border-radius: 0.4rem;
+  color: var(--theme-text);
+  background: var(--theme-gal-ai-bubble);
+}
+
+body[data-chat-mode="gal_chat"] .history-event--user .history-content {
+  background: var(--theme-gal-user-bubble);
+}
+
+body[data-chat-mode="gal_chat"] .history-event--tool .history-content {
+  border: 1px solid var(--theme-border);
+  background: var(--theme-gal-history-content);
+}
+
+body[data-chat-mode="gal_chat"] .history-close-button {
+  position: absolute;
+  top: 0.6rem;
+  right: 0.75rem;
+  z-index: 2;
+  display: block;
+  border: 0;
+  color: var(--theme-muted);
+  font-size: 1.6rem;
+  line-height: 1;
+  cursor: pointer;
+  background: transparent;
+}
+
+body[data-chat-mode="gal_chat"] .history-session-separator {
+  display: flex;
+}
+
+body[data-chat-mode="gal_chat"] .chat-error:not(:empty) {
+  position: fixed;
+  top: 4rem;
+  left: 50%;
+  z-index: 60;
+  max-width: 70vw;
+  margin: 0;
+  padding: 0.65rem 1rem;
+  transform: translateX(-50%);
+  border-radius: 0.4rem;
+  color: white;
+  background: rgba(156, 35, 35, 0.92);
+}

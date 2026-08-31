@@ -1,0 +1,56 @@
+# Local API credentials (commit only sanitized example/template files)
+.env
+.env.*
+!.env.example
+!.env.template
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# Model weights
+weights/
+
+# Runtime-generated audio
+wavs/
+
+# Private conversation data for both realtime and sandbox modes
+# Includes Chroma databases, chat history, recent memories, and biographies
+characters/*/memory_db/
+characters/*/memory_db_sandbox/
+
+# Local character-group display order
+characters/groups_record.json
+
+# Automatically generated character files
+characters/*/portraits/description_rectified.txt
+characters/*/ref_audios/description_rectified.txt
+
+# Model download caches
+.cache/
+.huggingface/
+
+# Runtime logs and temporary/backup files
+logs/
+*.log
+*.tmp
+*.bak
+*.orig
+*.swp
+*.swo
+
+# Editors and operating systems
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini

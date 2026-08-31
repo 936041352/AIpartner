@@ -1,0 +1,61 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>选择对话角色</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <link
+      rel="stylesheet"
+      href="/static/css/character-selection.css?v=20260829-1"
+    />
+  </head>
+  <body class="selection-page">
+    <main class="selection-shell">
+      <header class="selection-header">
+        <h1>选择想要对话的角色</h1>
+        <p>选择一名伙伴，开始你们之间的对话。角色初始化可能会消耗较长时间。</p>
+      </header>
+      <div class="group-toolbar">
+        <button id="toggleAllGroupsButton" type="button">展开全部</button>
+      </div>
+      <div id="characterGroups" class="character-groups"></div>
+    </main>
+
+    <div id="groupMenu" class="group-menu" role="menu" hidden></div>
+
+    <dialog id="deleteGroupDialog" class="group-dialog">
+      <form method="dialog">
+        <h2>删除分组</h2>
+        <p id="deleteGroupMessage"></p>
+        <label class="dialog-checkbox">
+          <input id="skipDeleteConfirmation" type="checkbox" />
+          本次不再提醒我
+        </label>
+        <div class="dialog-actions">
+          <button value="cancel">取消</button>
+          <button class="danger-button" value="confirm">确定</button>
+        </div>
+      </form>
+    </dialog>
+
+    <dialog id="characterSettingDialog" class="group-dialog character-setting-dialog">
+      <form method="dialog">
+        <header class="character-setting-heading">
+          <h2 id="characterSettingTitle">角色设定</h2>
+          <button class="character-setting-close" value="close" aria-label="关闭">×</button>
+        </header>
+        <pre id="characterSettingContent">正在读取角色设定……</pre>
+        <div class="dialog-actions">
+          <button value="close">关闭</button>
+        </div>
+      </form>
+    </dialog>
+
+    <script src="/static/js/character-selection.js?v=20260829-1"></script>
+  </body>
+</html>

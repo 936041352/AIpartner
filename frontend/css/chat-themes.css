@@ -1,0 +1,184 @@
+body {
+  color-scheme: light;
+  --theme-page-bg: #fafbfc;
+  --theme-surface: #ffffff;
+  --theme-soft: #f5f7f9;
+  --theme-border: #e1e5ea;
+  --theme-text: #20242a;
+  --theme-muted: #6f7782;
+  --theme-accent: #455a64;
+  --theme-accent-hover: #34464e;
+  --theme-user-bubble: #e2e8ed;
+  --theme-ai-bubble: #ffffff;
+  --theme-gal-dialogue: rgba(255, 255, 255, 0.9);
+  --theme-gal-text: #20242a;
+  --theme-gal-history-surface: rgba(255, 255, 255, 0.78);
+  --theme-gal-history-content: rgba(245, 247, 249, 0.24);
+  --theme-gal-user-bubble: rgba(226, 232, 237, 0.86);
+  --theme-gal-ai-bubble: rgba(255, 255, 255, 0.82);
+  --theme-topbar-gradient: rgba(94, 110, 118, 0.68);
+  --theme-accent-contrast: #ffffff;
+  --theme-disabled: #a8adb3;
+}
+
+body[data-chat-theme="rose_red"] {
+  --theme-page-bg: #f9f0f2;
+  --theme-surface: #fff8f9;
+  --theme-soft: #f4e1e6;
+  --theme-border: #ddb5c0;
+  --theme-text: #3d2028;
+  --theme-muted: #85616a;
+  --theme-accent: #b83255;
+  --theme-accent-hover: #962742;
+  --theme-user-bubble: #f2b8c7;
+  --theme-ai-bubble: #fff7f9;
+  --theme-gal-dialogue: rgba(255, 240, 244, 0.9);
+  --theme-gal-text: #3d2028;
+  --theme-gal-history-surface: rgba(255, 248, 249, 0.78);
+  --theme-gal-history-content: rgba(244, 225, 230, 0.24);
+  --theme-gal-user-bubble: rgba(242, 184, 199, 0.84);
+  --theme-gal-ai-bubble: rgba(255, 247, 249, 0.82);
+  --theme-topbar-gradient: rgba(165, 72, 98, 0.7);
+}
+
+body[data-chat-theme="sakura_pink"] {
+  --theme-page-bg: #fffafc;
+  --theme-surface: #fffdfe;
+  --theme-soft: #fdeff4;
+  --theme-border: #f2d4de;
+  --theme-text: #492c36;
+  --theme-muted: #8c6a76;
+  --theme-accent: #b94f73;
+  --theme-accent-hover: #963b5b;
+  --theme-user-bubble: #f9dce6;
+  --theme-ai-bubble: #fffdfe;
+  --theme-gal-dialogue: rgba(255, 245, 249, 0.9);
+  --theme-gal-text: #492c36;
+  --theme-gal-history-surface: rgba(255, 253, 254, 0.78);
+  --theme-gal-history-content: rgba(253, 239, 244, 0.24);
+  --theme-gal-user-bubble: rgba(249, 220, 230, 0.84);
+  --theme-gal-ai-bubble: rgba(255, 253, 254, 0.82);
+  --theme-topbar-gradient: rgba(190, 108, 136, 0.68);
+}
+
+body[data-chat-theme="royal_gold"] {
+  --theme-page-bg: #fcfaf3;
+  --theme-surface: #fffefa;
+  --theme-soft: #f7f1df;
+  --theme-border: #e5d6aa;
+  --theme-text: #382f1c;
+  --theme-muted: #7b6c48;
+  --theme-accent: #8b6508;
+  --theme-accent-hover: #6d4f05;
+  --theme-user-bubble: #f1e1af;
+  --theme-ai-bubble: #fffefa;
+  --theme-gal-dialogue: rgba(255, 250, 232, 0.9);
+  --theme-gal-text: #382f1c;
+  --theme-gal-history-surface: rgba(255, 254, 250, 0.78);
+  --theme-gal-history-content: rgba(247, 241, 223, 0.24);
+  --theme-gal-user-bubble: rgba(241, 225, 175, 0.84);
+  --theme-gal-ai-bubble: rgba(255, 254, 250, 0.82);
+  --theme-topbar-gradient: rgba(161, 125, 45, 0.68);
+}
+
+body[data-chat-theme="sky_blue"] {
+  --theme-page-bg: #f6fbfe;
+  --theme-surface: #fcfeff;
+  --theme-soft: #eaf6fc;
+  --theme-border: #cbe2ef;
+  --theme-text: #183242;
+  --theme-muted: #5b7686;
+  --theme-accent: #216e9c;
+  --theme-accent-hover: #185677;
+  --theme-user-bubble: #c5e4f4;
+  --theme-ai-bubble: #fcfeff;
+  --theme-gal-dialogue: rgba(241, 249, 254, 0.9);
+  --theme-gal-text: #183242;
+  --theme-gal-history-surface: rgba(252, 254, 255, 0.78);
+  --theme-gal-history-content: rgba(234, 246, 252, 0.24);
+  --theme-gal-user-bubble: rgba(197, 228, 244, 0.84);
+  --theme-gal-ai-bubble: rgba(252, 254, 255, 0.82);
+  --theme-topbar-gradient: rgba(73, 137, 174, 0.68);
+}
+
+body[data-chat-theme="sprout_green"] {
+  --theme-page-bg: #f7fcf7;
+  --theme-surface: #fdfffd;
+  --theme-soft: #ecf7ed;
+  --theme-border: #c9e1cb;
+  --theme-text: #1f3924;
+  --theme-muted: #5e7b63;
+  --theme-accent: #357a42;
+  --theme-accent-hover: #285f33;
+  --theme-user-bubble: #cae8cd;
+  --theme-ai-bubble: #fdfffd;
+  --theme-gal-dialogue: rgba(244, 252, 244, 0.9);
+  --theme-gal-text: #1f3924;
+  --theme-gal-history-surface: rgba(253, 255, 253, 0.78);
+  --theme-gal-history-content: rgba(236, 247, 237, 0.24);
+  --theme-gal-user-bubble: rgba(202, 232, 205, 0.84);
+  --theme-gal-ai-bubble: rgba(253, 255, 253, 0.82);
+  --theme-topbar-gradient: rgba(78, 140, 89, 0.68);
+}
+
+body[data-chat-theme="warm_orange"] {
+  --theme-page-bg: #fff9f4;
+  --theme-surface: #fffefc;
+  --theme-soft: #fdf0e4;
+  --theme-border: #eed2b8;
+  --theme-text: #43291a;
+  --theme-muted: #8a6853;
+  --theme-accent: #b95114;
+  --theme-accent-hover: #913e0d;
+  --theme-user-bubble: #f9dcc3;
+  --theme-ai-bubble: #fffefc;
+  --theme-gal-dialogue: rgba(255, 247, 239, 0.9);
+  --theme-gal-text: #43291a;
+  --theme-gal-history-surface: rgba(255, 254, 252, 0.78);
+  --theme-gal-history-content: rgba(253, 240, 228, 0.24);
+  --theme-gal-user-bubble: rgba(249, 220, 195, 0.84);
+  --theme-gal-ai-bubble: rgba(255, 254, 252, 0.82);
+  --theme-topbar-gradient: rgba(187, 105, 56, 0.68);
+}
+
+body[data-chat-theme="mystic_purple"] {
+  --theme-page-bg: #faf7fc;
+  --theme-surface: #fefcff;
+  --theme-soft: #f2eaf8;
+  --theme-border: #dccbe8;
+  --theme-text: #34213f;
+  --theme-muted: #755f80;
+  --theme-accent: #70469d;
+  --theme-accent-hover: #57367c;
+  --theme-user-bubble: #e5d5f0;
+  --theme-ai-bubble: #fefcff;
+  --theme-gal-dialogue: rgba(249, 244, 253, 0.9);
+  --theme-gal-text: #34213f;
+  --theme-gal-history-surface: rgba(254, 252, 255, 0.78);
+  --theme-gal-history-content: rgba(242, 234, 248, 0.24);
+  --theme-gal-user-bubble: rgba(229, 213, 240, 0.84);
+  --theme-gal-ai-bubble: rgba(254, 252, 255, 0.82);
+  --theme-topbar-gradient: rgba(126, 91, 160, 0.68);
+}
+
+body[data-chat-theme="midnight_black"] {
+  color-scheme: dark;
+  --theme-page-bg: #101318;
+  --theme-surface: #181d24;
+  --theme-soft: #222a33;
+  --theme-border: #3a4653;
+  --theme-text: #e8edf2;
+  --theme-muted: #a4afba;
+  --theme-accent: #4e83b1;
+  --theme-accent-hover: #6498c3;
+  --theme-user-bubble: #29445a;
+  --theme-ai-bubble: #1c232b;
+  --theme-gal-dialogue: rgba(18, 23, 30, 0.92);
+  --theme-gal-text: #edf2f7;
+  --theme-gal-history-surface: rgba(18, 23, 30, 0.82);
+  --theme-gal-history-content: rgba(34, 42, 51, 0.28);
+  --theme-gal-user-bubble: rgba(41, 68, 90, 0.88);
+  --theme-gal-ai-bubble: rgba(28, 35, 43, 0.88);
+  --theme-topbar-gradient: rgba(5, 8, 13, 0.88);
+  --theme-disabled: #55606b;
+}

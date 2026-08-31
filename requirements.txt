@@ -1,0 +1,22 @@
+# 请先根据conda配置自行下载合适版本的torch
+
+faster-qwen3-tts==0.3.2
+chromadb==1.5.9
+langgraph==1.2.11
+langchain-openai==1.4.3
+sentence-transformers==5.7.0
+zai-sdk==0.2.3
+
+fastapi==0.141.1
+uvicorn[standard]==0.52.2
+pydantic==2.13.4
+langchain-core==1.5.4
+numpy==2.5.2
+soundfile==0.14.0
+qwen-tts==0.1.1
+transformers==4.57.3
+huggingface-hub==0.36.2
+torchaudio
+python-dotenv==1.2.2
+requests==2.34.2
+

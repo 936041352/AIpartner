@@ -1,0 +1,60 @@
+# 所有角色共用的默认配置。角色目录中的 character_config.toml 可覆盖任意项目。
+# 留空时自动使用角色目录名，不影响程序内部使用的角色 ID。
+true_character_name = ""
+
+# 场景模式选择
+# 可选 "realtime" 或者 "sandbox"，默认为"realtime"。
+# 注意：角色不同模式下记忆不互通。
+# - "realtime": 实时模式。AI伙伴会实时感知现实时间，并且可以通过互联网搜索最新消息。
+# - "sandbox" : 沙盒模式。AI伙伴对于现实时间不敏感，无法通过互联网搜索信息，用户可以在对话中添加以括号包裹的注释来告知AI伙伴当前时间和场景。
+scene_mode = "realtime"
+
+# 聊天界面主题：default、rose_red、sakura_pink、royal_gold、sky_blue、
+# sprout_green、warm_orange、mystic_purple、midnight_black。
+chat_theme = "default"
+
+# 是否在角色选择页面优先显示。
+favour = false
+
+# 自定义分组；留空表示没有自定义分组。
+group = ""
+
+[translate]
+# 支持填写中文语言名或 Qwen3-TTS 使用的标准英文语言名。
+source_language = "Chinese"
+# 留空表示不翻译；例如可填写 "日语" 或 "Japanese"。
+target_language = ""
+
+[display]
+# 允许将“伴随工具调用生成的角色文本”加入演出队列的工具名。
+# 目前只有两个工具：["web_search_tool", "search_memory_tool"]
+tool_call_content_allowlist = ["web_search_tool", "search_memory_tool"]
+
+[memory.context]
+# 每次请求至少保留的最近对话轮数。
+base_message_turn = 3
+# 发送给大模型的工作记忆最大条数。
+working_memory_limit = 15
+
+[memory.biography]
+# 生成长期核心传记时，最多读取的重要记忆条数。
+source_memory_limit = 30
+
+[memory.recent]
+# 生成近期记忆时，最多读取的短期记忆 JSON 项目数。
+short_memory_items = 100
+# 最多加载的近期记忆总结行数。
+recent_memory_items = 10
+
+[memory.search]
+# 每个检索词从数据库返回的最大结果数。
+top_k = 3
+
+[memory.retention]
+# 低、中、高重要度记忆分别保留的天数；high_importance_days = 0 表示永久保留。
+low_importance_days = 20
+medium_importance_days = 600
+high_importance_days = 0
+# 背景故事不计入容量；普通记忆超限后会清理到 max_capacity - safe_margin。
+max_capacity = 5000
+safe_margin = 500

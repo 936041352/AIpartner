@@ -1,0 +1,195 @@
+﻿<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <title>AI 角色对话</title>
+    <link rel="icon" href="/favicon.ico" sizes="any" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/apple-touch-icon.png" />
+    <link rel="manifest" href="/static/site.webmanifest" />
+    <link rel="stylesheet" href="/static/css/chat-themes.css?v=20260821-5" />
+    <link rel="stylesheet" href="/static/css/styles.css?v=20260822-1" />
+    <link rel="stylesheet" href="/static/css/gal-chat.css?v=20260825-1" />
+  </head>
+  <body
+    data-chat-mode="gal_chat"
+    data-chat-theme="default"
+    data-polling-status="busy"
+  >
+    <div id="topbarArea" class="topbar-area">
+      <div class="topbar-hint" aria-hidden="true">···</div>
+      <header class="chat-header">
+        <a class="header-button" href="/" target="_blank" rel="noopener">
+          角色选择
+        </a>
+        <div class="header-tools">
+          <details id="themePicker" class="theme-picker">
+            <summary class="header-button">主题</summary>
+            <div class="theme-menu" role="group" aria-label="聊天主题">
+              <button type="button" data-chat-theme="default">
+                <span class="theme-swatch theme-swatch--default"></span>简洁白
+              </button>
+              <button type="button" data-chat-theme="rose_red">
+                <span class="theme-swatch theme-swatch--rose"></span>玫瑰红
+              </button>
+              <button type="button" data-chat-theme="sakura_pink">
+                <span class="theme-swatch theme-swatch--sakura"></span>樱花粉
+              </button>
+              <button type="button" data-chat-theme="royal_gold">
+                <span class="theme-swatch theme-swatch--gold"></span>尊贵金
+              </button>
+              <button type="button" data-chat-theme="sky_blue">
+                <span class="theme-swatch theme-swatch--sky"></span>天空蓝
+              </button>
+              <button type="button" data-chat-theme="sprout_green">
+                <span class="theme-swatch theme-swatch--green"></span>嫩芽绿
+              </button>
+              <button type="button" data-chat-theme="warm_orange">
+                <span class="theme-swatch theme-swatch--orange"></span>热情橙
+              </button>
+              <button type="button" data-chat-theme="mystic_purple">
+                <span class="theme-swatch theme-swatch--purple"></span>神秘紫
+              </button>
+              <button type="button" data-chat-theme="midnight_black">
+                <span class="theme-swatch theme-swatch--night"></span>暗夜黑
+              </button>
+            </div>
+          </details>
+          <button
+            id="assetSelectButton"
+            class="header-button asset-button"
+            type="button"
+          >背景</button>
+          <button
+            id="portraitLayoutButton"
+            class="header-button"
+            type="button"
+          >立绘调整</button>
+        </div>
+        <div class="header-actions">
+          <div class="mode-switch" role="group" aria-label="聊天模式">
+            <button id="galModeButton" type="button" aria-pressed="true">
+              旮旯模式
+            </button>
+            <button id="textModeButton" type="button" aria-pressed="false">
+              文本模式
+            </button>
+          </div>
+          <button id="closeCharacterButton" type="button">关闭角色</button>
+        </div>
+      </header>
+    </div>
+    <input
+      id="assetFileInput"
+      type="file"
+      accept="image/png,image/jpeg"
+      hidden
+    />
+
+    <div id="historyOverlay" class="history-overlay" aria-hidden="true">
+      <section id="chatHistory" aria-label="历史对话记录">
+        <button
+          id="closeHistoryButton"
+          class="history-close-button"
+          type="button"
+          aria-label="关闭对话记录"
+        >×</button>
+        <div id="historyList">
+          <div id="historyTop">
+            <button id="loadMoreHistoryButton" type="button" hidden>加载更多</button>
+            <span id="historyTopStatus"></span>
+          </div>
+          <div id="historyTurns"></div>
+        </div>
+      </section>
+    </div>
+
+    <section id="activityStatus" aria-label="角色活动状态">
+      <span class="activity-item" data-status="generating_reply">生成回复</span>
+      <span class="activity-item" data-status="retrieving_memory">记忆检索</span>
+      <span class="activity-item" data-status="searching_web">网络检索</span>
+      <span class="activity-item" data-status="synthesizing_speech">语音合成</span>
+      <span class="activity-item" data-status="consolidating_memory">记忆整理</span>
+    </section>
+
+    <main id="galChatView" class="gal-stage" aria-label="旮旯模式演出">
+      <div class="gal-background" aria-hidden="true"></div>
+      <img id="portrait" alt="角色立绘" hidden />
+
+      <section
+        id="portraitLayoutPanel"
+        class="portrait-layout-panel"
+        aria-label="立绘位置和大小调整"
+        hidden
+      >
+        <div class="portrait-layout-heading">
+          <strong>立绘调整</strong>
+          <span id="portraitScaleValue">100%</span>
+        </div>
+        <div class="portrait-step-selector" role="group" aria-label="位移幅度">
+          <span>位移幅度</span>
+          <button type="button" data-portrait-step="small">小</button>
+          <button
+            type="button"
+            data-portrait-step="medium"
+            aria-pressed="true"
+          >中</button>
+          <button type="button" data-portrait-step="large">大</button>
+        </div>
+        <div class="portrait-layout-controls">
+          <div class="portrait-direction-controls" aria-label="调整立绘位置">
+            <button type="button" data-portrait-move="up" aria-label="向上移动">↑</button>
+            <button type="button" data-portrait-move="left" aria-label="向左移动">←</button>
+            <button type="button" data-portrait-move="right" aria-label="向右移动">→</button>
+            <button type="button" data-portrait-move="down" aria-label="向下移动">↓</button>
+          </div>
+          <div class="portrait-scale-controls" aria-label="调整立绘大小">
+            <button type="button" data-portrait-scale="increase">＋</button>
+            <button type="button" data-portrait-scale="decrease">−</button>
+          </div>
+        </div>
+        <div class="portrait-layout-actions">
+          <button id="portraitLayoutReset" type="button">重置</button>
+          <button id="portraitLayoutCancel" type="button">取消</button>
+          <button id="portraitLayoutSave" type="button" class="primary">保存</button>
+        </div>
+        <p id="portraitLayoutStatus" class="portrait-layout-status" role="status"></p>
+      </section>
+
+      <section class="gal-dialogue" aria-live="polite">
+        <div class="gal-dialogue-header">
+          <span id="galDialogueSpeaker"></span>
+          <button
+            id="openHistoryButton"
+            class="history-open-button"
+            type="button"
+            aria-label="查看对话记录"
+            title="查看对话记录"
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h10" />
+            </svg>
+          </button>
+        </div>
+        <div id="galDialogueText" class="gal-dialogue-text"></div>
+      </section>
+    </main>
+
+    <div class="chat-composer">
+      <label for="userInput">输入消息：</label>
+      <input id="userInput" type="text" placeholder="输入你想说的话……" />
+      <button id="sendButton" type="button">发送</button>
+    </div>
+
+    <audio id="audio" preload="auto"></audio>
+    <p id="uiStatus" class="ui-status" role="status"></p>
+    <p id="voiceStatus" class="chat-error" role="alert"></p>
+
+    <!-- 修改脚本功能后更新版本号，避免浏览器继续使用旧缓存。 -->
+    <script src="/static/js/gal-chat.js?v=20260821-1"></script>
+    <script src="/static/js/chat-theme.js?v=20260821-1"></script>
+    <script src="/static/js/portrait-layout.js?v=20260825-1"></script>
+    <script src="/static/js/chat.js?v=20260828-1"></script>
+  </body>
+</html>

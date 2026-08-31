@@ -1,0 +1,5 @@
+# 本角色配置。未填写的项目自动继承 ../character_config.default.toml。
+true_character_name = "DS鲸鱼娘"
+scene_mode = "realtime"
+chat_theme = "default"
+favour = true
