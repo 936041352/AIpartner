@@ -133,6 +133,8 @@ AIpartner 本身不包含本地聊天大模型。对话文本由你在 `.env` �
 > [!IMPORTANT]
 > 当前语音实现要求 CUDA 可用，并以 BF16 在 NVIDIA GPU 上运行。没有可用的 NVIDIA GPU、模型权重或完整参考语音时，角色仍可使用文本模式。
 
+如果你没有任何环境配置经验，请参考 [`使用指南/AIpartner零基础环境配置教程.md`](使用指南/AIpartner零基础环境配置教程.md) 来配置项目所需环境。
+
 ## 安装
 
 以下命令以 Windows PowerShell 为例。Linux 用户可以使用相同的 Conda 与 Python 命令，但目前主要在 Windows 环境验证。
