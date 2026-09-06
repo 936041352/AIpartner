@@ -6,13 +6,20 @@ title AIpartner Launcher
 
 set "APP_URL=http://127.0.0.1:8000"
 set "CONDA_ENV=aipartner"
+rem Optional: set the full path to conda.exe here. Leave empty for auto-detection.
+rem Example: set "CONDA_EXE=D:\miniconda3\Scripts\conda.exe"
 set "CONDA_EXE="
 
-rem Find Conda.
-if exist "%USERPROFILE%\miniconda3\Scripts\conda.exe" set "CONDA_EXE=%USERPROFILE%\miniconda3\Scripts\conda.exe"
+rem Find Conda only when no manual path is configured.
+if not defined CONDA_EXE if exist "%USERPROFILE%\miniconda3\Scripts\conda.exe" set "CONDA_EXE=%USERPROFILE%\miniconda3\Scripts\conda.exe"
 if not defined CONDA_EXE if exist "%USERPROFILE%\anaconda3\Scripts\conda.exe" set "CONDA_EXE=%USERPROFILE%\anaconda3\Scripts\conda.exe"
 if not defined CONDA_EXE if exist "C:\ProgramData\miniconda3\Scripts\conda.exe" set "CONDA_EXE=C:\ProgramData\miniconda3\Scripts\conda.exe"
 if not defined CONDA_EXE if exist "C:\ProgramData\anaconda3\Scripts\conda.exe" set "CONDA_EXE=C:\ProgramData\anaconda3\Scripts\conda.exe"
+
+rem Also check common Conda installations in the root of drive D.
+if not defined CONDA_EXE if exist "D:\miniconda3\Scripts\conda.exe" set "CONDA_EXE=D:\miniconda3\Scripts\conda.exe"
+if not defined CONDA_EXE if exist "D:\anaconda3\Scripts\conda.exe" set "CONDA_EXE=D:\anaconda3\Scripts\conda.exe"
+if not defined CONDA_EXE if exist "D:\conda\Scripts\conda.exe" set "CONDA_EXE=D:\conda\Scripts\conda.exe"
 
 if not defined CONDA_EXE (
     for /f "delims=" %%I in ('where conda.exe 2^>nul') do (
@@ -20,12 +27,9 @@ if not defined CONDA_EXE (
     )
 )
 
-if not defined CONDA_EXE (
-    echo [ERROR] Conda was not found.
-    echo Please check your Miniconda or Anaconda installation.
-    pause
-    exit /b 1
-)
+if not defined CONDA_EXE goto conda_not_found
+if not exist "%CONDA_EXE%" goto conda_invalid
+if exist "%CONDA_EXE%\" goto conda_invalid
 
 if not exist "%~dp0main.py" (
     echo [ERROR] main.py was not found.
@@ -71,3 +75,23 @@ exit /b 1
 echo AIpartner is ready.
 start "" "%APP_URL%"
 exit /b 0
+
+:conda_not_found
+echo [ERROR] Conda was not found.
+goto conda_help
+
+:conda_invalid
+echo [ERROR] CONDA_EXE does not point to an existing executable file.
+echo Configured path: "%CONDA_EXE%"
+goto conda_help
+
+:conda_help
+echo Edit this BAT file in a text editor: "%~f0"
+echo Find the line set "CONDA_EXE=" near the top.
+echo Set it to the full path of your Conda executable, for example:
+echo     set "CONDA_EXE=D:\miniconda3\Scripts\conda.exe"
+echo Use the actual path to Scripts\conda.exe, not just the installation folder.
+echo Save this BAT file and run it again.
+echo If Conda is not installed, install Miniconda or Anaconda first.
+pause
+exit /b 1
