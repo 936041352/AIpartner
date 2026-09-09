@@ -3,6 +3,7 @@ from langgraph.graph import StateGraph, START, END
 from langchain_core.messages import SystemMessage, HumanMessage, AIMessage, ToolMessage
 from langchain_core.runnables import RunnableConfig
 from contextlib import nullcontext
+from utils.long_memory.long_memory_initializer import generate_long_memory
 
 from utils.memory_utils import (
     MemoryExtraction,
@@ -54,7 +55,7 @@ import datetime
 # ===========================
 NUM_CHATS_TO_SAVE = 1  # 对话存储频率
 NUM_CHATS_TO_CLEAN_MEMORY = 5  # 记忆库清洗频率
-NUM_CHATS_TO_UPDATE_BIO = 500  # 人物传记更新频率
+NUM_CHATS_TO_UPDATE_BIO = 50  # 人物传记更新频率
 # 保存对话到数据库时忽略的工具调用及其原始输出。
 # 记忆检索结果属于已有记忆，网络搜索结果属于外部知识，都不应被重复归档。
 ignored_tool_names = {
@@ -643,15 +644,21 @@ class CharacterChatEngine:
 
         if this_turn % NUM_CHATS_TO_UPDATE_BIO == 0:
             print("\n[用户传记] 正在更新用户传记（长期记忆）")
-            core_biography = initialize_core_biography(
-                character_name=self.character_name,
-                true_character_name=self.true_character_name,
-                character_setting_summary=self.character_setting_summary,
-                memory_manager=self.memory_manager,
-                llm=get_llm(),
-                long_memory_len=self.biography_source_limit,
-                memory_root=self.memory_root,
+            # core_biography = initialize_core_biography(
+            #     character_name=self.character_name,
+            #     true_character_name=self.true_character_name,
+            #     character_setting_summary=self.character_setting_summary,
+            #     memory_manager=self.memory_manager,
+            #     llm=get_llm(),
+            #     long_memory_len=self.biography_source_limit,
+            #     memory_root=self.memory_root,
+            #     scene_mode=self.scene_mode,
+            # )
+            core_biography = generate_long_memory(
+                memory_folder=self.memory_root,
                 scene_mode=self.scene_mode,
+                memory_manager=self.memory_manager,
+                character_name=self.character_name,
             )
             print(f"[用户传记] 最新用户传记如下：\n{core_biography}")
             result["core_biography"] = core_biography
@@ -741,15 +748,21 @@ def create_runtime(
     )
 
     print("\n[用户传记] 正在更新用户传记（长期记忆）")
-    core_bio = initialize_core_biography(
-        character_name=engine.character_name,
-        true_character_name=engine.true_character_name,
-        character_setting_summary=engine.character_setting_summary,
-        memory_manager=engine.memory_manager,
-        llm=get_thinking_llm(),
-        long_memory_len=engine.biography_source_limit,
-        memory_root=engine.memory_root,
+    # core_bio = initialize_core_biography(
+    #     character_name=engine.character_name,
+    #     true_character_name=engine.true_character_name,
+    #     character_setting_summary=engine.character_setting_summary,
+    #     memory_manager=engine.memory_manager,
+    #     llm=get_thinking_llm(),
+    #     long_memory_len=engine.biography_source_limit,
+    #     memory_root=engine.memory_root,
+    #     scene_mode=engine.scene_mode,
+    # )
+    core_bio = generate_long_memory(
+        memory_folder=engine.memory_root,
         scene_mode=engine.scene_mode,
+        memory_manager=engine.memory_manager,
+        character_name=engine.character_name,
     )
     print(f"[用户传记] 最新用户传记（长期记忆）如下：\n{core_bio}")
 

@@ -20,6 +20,8 @@ from .backstory_importer import (
     backstory_metadata_from_id,
 )
 from .character_config import VALID_SCENE_MODES
+from .relative_time import format_relative_time
+from .long_memory.episode_buffer_sync import EPISODE_BUFFER_CATEGORY
 
 
 _embedding_functions: dict[str, Any] = {}
@@ -281,7 +283,8 @@ class MemoryManager:
 
     def search_memory(self, query_string: str, category: str = None,
                       min_importance: int = 1, top_k: int = 3,
-                      include_backstory: bool = False) -> str:
+                      include_backstory: bool = False,
+                      display_category: bool = False) -> str:
         # 1. 将大模型传来的逗号分隔字符串拆分成列表，并限制最多5个
         queries = [q.strip() for q in query_string.split(',') if q.strip()][:5]
 
@@ -339,20 +342,24 @@ class MemoryManager:
             doc = doc_info['doc']
             meta = doc_info['meta']
             if meta.get("category") == BACKSTORY_CATEGORY:
-                formatted_results.append(
-                    f"- [角色背景, 重要性(1-10): {meta.get('importance')}, "
-                    f"类型: {meta.get('backstory_type')}] {doc}"
-                )
+                tmp_result = f"- [角色背景, 重要性(1-10): {meta.get('importance')}"
+                if display_category:
+                    tmp_result += f", 类型: {meta.get('backstory_type')}"
+                tmp_result += f"] {doc}"
+                formatted_results.append(tmp_result)
             else:
-                details = (
-                    f"重要性(1-10): {meta.get('importance')}, "
-                    f"类别: {meta.get('category')}"
-                )
+                details = f"重要性(1-10): {meta.get('importance')}"
+                if display_category:
+                    details += f", 类别: {meta.get('category')}"
                 if getattr(self, "scene_mode", "realtime") == "realtime":
-                    timestamp = datetime.fromtimestamp(
-                        meta.get('timestamp')
-                    ).strftime("%Y%m%d_%H%M%S")
-                    details = f"保存时间: {timestamp}, {details}"
+                    raw_timestamp = meta.get("timestamp")
+                    timestamp = datetime.fromtimestamp(raw_timestamp).strftime("%Y-%m-%d %H:%M:%S")
+                    # 获得相对时间，
+                    rela_time = format_relative_time(raw_timestamp)
+                    if rela_time:
+                        details = f"保存时间: {rela_time} ({timestamp}), {details}"
+                    else:
+                        details = f"保存时间: {timestamp}, {details}"
                 formatted_results.append(f"- [{details}] {doc}")
 
         return "\n".join(formatted_results)
@@ -377,7 +384,7 @@ class MemoryManager:
                     candidates.get("ids", []),
                     candidates.get("metadatas", []),
                 )
-                if metadata.get("category") != BACKSTORY_CATEGORY
+                if metadata.get("category") not in (BACKSTORY_CATEGORY, EPISODE_BUFFER_CATEGORY)
             ]
 
             # 2. 如果存在过期记录，则执行批量删除
@@ -472,15 +479,16 @@ class MemoryManager:
             records = [
                 (doc_id, metadata)
                 for doc_id, metadata in zip(all_ids, all_metadatas)
-                if metadata.get("category") != BACKSTORY_CATEGORY
+                if metadata.get("category") not in (BACKSTORY_CATEGORY, EPISODE_BUFFER_CATEGORY)
             ]
-            backstory_count = len(all_ids) - len(records)
+            # 背景故事和事件缓存由源文件管理，不参与自动淘汰。
+            protected_count = len(all_ids) - len(records)
             current_count = len(records)
 
             if current_count <= max_capacity:
                 return 0
 
-            # 只按普通记忆容量计算超出部分，背景故事不占份额。
+            # 只按普通记忆容量计算超出部分，受保护类别不占份额。
             delete_count = min(
                 (current_count - max_capacity) + safe_margin,
                 current_count,
@@ -488,7 +496,7 @@ class MemoryManager:
 
             print(
                 f"\n[容量警报] 当前普通记忆容量 ({current_count}) 已超载！"
-                f"最大限制: {max_capacity}；另有 {backstory_count} 条背景故事不计入容量。"
+                f"最大限制: {max_capacity}；另有 {protected_count} 条背景故事／事件缓存不计入容量。"
             )
             print(f"[内存管理] 触发智能 LRU 强制淘汰，计划清理 {delete_count} 条边缘记忆...")
 
@@ -772,7 +780,7 @@ def build_search_tool_for_character(
         # 修改 description，引导大模型输出多个以逗号分隔的检索词
         query: str = Field(..., description="检索的关键词或核心短语。为了提高检索全面性，可以根据用户问题提取出多个相关的不同检索词（至少2个，最多5个），并严格使用英文逗号 ',' 分隔。例如：'喜欢的食物,水果,旅行经历'")
         category: str = Field(
-            None, description="【可选】记忆类别过滤。可选值：'user_fact', 'character_setting', 'event', 'character_backstory'，默认检索全部类别的记忆。")
+            None, description="【可选】记忆类别过滤。可选值：'user_fact', 'character_setting', 'event', 'character_backstory', 'episode_buffer'（经过一定整理的重要共同经历），默认检索全部类别的记忆。")
         min_importance: int = Field(1, description="【可选】最低重要度过滤 (1-10)。默认 1。")
         include_backstory: bool = Field(
             True,

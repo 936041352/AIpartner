@@ -13,6 +13,7 @@ from langchain_core.messages import RemoveMessage
 from .character_config import VALID_SCENE_MODES
 from .prompt_container import RECENT_MEMORY_PROMPTS, ARCHIVE_MEMORY_PROMPTS
 from .display import CharacterDisplayService
+from .long_memory.long_memory_initializer import generate_long_memory
 
 
 # 结构化输出定义 (Pydantic Models)
@@ -502,6 +503,7 @@ def get_delete_instructions(state, message_len):
     return delete_instructions
 
 
+# 旧版个人专辑（长期记忆）总结器，已经不再使用
 def initialize_core_biography(
     character_name: str,
     character_setting_summary: str,
