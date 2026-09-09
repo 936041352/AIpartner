@@ -1,18 +1,19 @@
 """更新并检查长期记忆，检查通过后才返回可用于聊天的文本。
 
 同一 memory_folder 的更新必须串行执行。
-整合层不重试模型、不迁移旧记忆、不写额外状态文件。
+整合层不重试模型、不迁移旧记忆；首次使用时创建标准空历史。
 """
 
 from __future__ import annotations
 
 import json
+import os
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
 
 from .profile_fact_extractor import (
-    FACTS_PATH, HISTORY_PATH, CATEGORIES, extract_profile_facts,
+    FACTS_PATH, HISTORY_PATH, CATEGORIES, LEGACY_CORE_MEMORY_NAME, extract_profile_facts,
     _load_turns as _load_profile_turns,
 )
 from .core_episode_extractor import (
@@ -31,6 +32,56 @@ MAX_UNPROCESSED_TURNS = 100
 MAX_PROFILE_SNAPSHOT_DIFF = 6
 MAX_JOURNEY_SNAPSHOT_DIFF = 2
 VALID_SCENE_MODES = ("realtime", "sandbox")
+
+
+def _ensure_initial_history(memory_path: Path) -> None:
+    """仅为没有新旧长期记忆的首次使用创建空历史；已有异常文件不覆盖。
+
+    必须在提取器、总结器写入任何状态前调用。已有历史只检查基本结构，
+    每轮消息的校验仍由原有加载器负责。同一记忆目录须串行初始化。
+    """
+    history_path = memory_path / HISTORY_PATH
+    try:
+        with history_path.open("r", encoding="utf-8") as file:
+            history = json.load(file)
+    except FileNotFoundError:
+        # 只有历史确实不存在才允许继续判断首次使用。
+        # 旧记忆即便为空或损坏，也不能被当成不存在。
+        previous_paths = (
+            Path(LEGACY_CORE_MEMORY_NAME), FACTS_PATH, EPISODES_PATH,
+            PROFILE_PATH, JOURNEY_PATH,
+        )
+        for relative_path in previous_paths:
+            previous_path = memory_path / relative_path
+            try:
+                previous_path.lstat()
+            except FileNotFoundError:
+                continue
+            except OSError as error:
+                raise RuntimeError(f"无法检查已有长期记忆：{previous_path}：{error}") from error
+            raise RuntimeError(
+                f"聊天历史缺失：{history_path}；但已有长期记忆 {previous_path}，"
+                "不能按首次使用初始化，请检查或恢复历史文件。"
+            )
+        try:
+            history_path.parent.mkdir(parents=True, exist_ok=True)
+            # 独占创建：检查后若有其他进程创建文件，也不覆盖对方内容。
+            with history_path.open("x", encoding="utf-8") as file:
+                json.dump(
+                    {"schema_version": 1, "max_turns": 1000, "turns": []},
+                    file, ensure_ascii=False, indent=2,
+                )
+                file.write("\n")
+                file.flush()
+                os.fsync(file.fileno())
+        except OSError as error:
+            raise RuntimeError(f"首次使用的空历史创建失败：{history_path}：{error}") from error
+        print("[长期记忆初始化] 首次使用，已创建空聊天历史。")
+        return
+    except (OSError, ValueError) as error:
+        raise RuntimeError(f"聊天历史无法读取：{history_path}：{error}") from error
+    if not isinstance(history, dict) or not isinstance(history.get("turns"), list):
+        raise RuntimeError(f"聊天历史结构错误：{history_path}；turns 必须是数组。")
 
 
 def _read_json(path: Path, errors: List[str]) -> Optional[Dict[str, Any]]:
@@ -241,7 +292,7 @@ def generate_long_memory(
     """先更新两条记忆链路，再检查落盘状态；通过后才返回聊天上下文。
 
     Args:
-        memory_folder: 当前角色记忆目录，首次使用也须有合法 history.json。
+        memory_folder: 当前角色记忆目录；无历史且无新旧长期记忆时自动创建空历史。
         thinking: 传给四个模块，选择思考或普通模型。
         strict: 传给两个提取器，控制已有源数据的读取策略。
         force: 是否处理不足50轮的尾部对话，不强制重写总结。
@@ -258,6 +309,10 @@ def generate_long_memory(
     """
     if scene_mode not in VALID_SCENE_MODES:
         raise RuntimeError(f"非法 scene_mode：{scene_mode!r}")
+    try:
+        memory_path = Path(memory_folder).expanduser()
+    except (TypeError, ValueError, OSError) as error:
+        raise RuntimeError(f"记忆目录无效：{error}") from error
     # 子模块负责各自的调用重试与普通错误处理；返回值不代表整体已同步。
     # 只根据最终文件判断是否允许聊天，部分批次失败不会回滚成功批次。
     if scene_mode == "realtime":
@@ -265,6 +320,7 @@ def generate_long_memory(
             ZoneInfo(timezone_name)
         except (ZoneInfoNotFoundError, ValueError, TypeError) as error:
             raise RuntimeError(f"实时模式时区不可用：{timezone_name!r}") from error
+    _ensure_initial_history(memory_path)
     # 整理用户画像事实
     extract_profile_facts(memory_folder, thinking=thinking, strict=strict, force=force)
     # 更新用户画像。为了准确性，强制思考
