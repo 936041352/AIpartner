@@ -54,8 +54,14 @@ class ChatHistoryStore:
             if any(turn.get("turn_id") == turn_id for turn in data["turns"]):
                 raise ValueError(f"历史轮次已存在：{turn_id}")
 
+            # 轮次序号单调递增且永不复用：历史裁剪后旧目录仍能被准确
+            # 判定为"已过期"，不会因为序号平移而错删仍在使用的语音。
+            turn_number = int(data.get("next_turn_number", 1))
+            data["next_turn_number"] = turn_number + 1
+
             data["turns"].append({
                 "turn_id": turn_id,
+                "turn_number": turn_number,
                 "started_at": created_at,
                 "completed_at": None,
                 "status": "in_progress",
@@ -199,6 +205,65 @@ class ChatHistoryStore:
                 )
             return self._ready_queue.popleft()
 
+    def list_turn_ids(self) -> set[str]:
+        """
+        返回当前仍保留在历史中的全部轮次 ID。
+
+        供语音文件清理使用：只有历史已丢弃的轮次，其音频才可以删除。
+        """
+        with self._lock:
+            data = self._read_unlocked()
+        turns = data.get("turns")
+        if not isinstance(turns, list):
+            return set()
+        return {
+            turn["turn_id"]
+            for turn in turns
+            if isinstance(turn, dict)
+            and isinstance(turn.get("turn_id"), str)
+        }
+
+    def get_turn_number(self, turn_id: str) -> int | None:
+        """
+        返回轮次的稳定序号（从 1 开始，永不复用）。
+
+        语音目录以该序号命名，因此必须与轮次一一对应且不随历史裁剪变化。
+        旧版历史没有该字段时，退化为按当前位置推断。
+        """
+        with self._lock:
+            data = self._read_unlocked()
+        turns = data.get("turns")
+        if not isinstance(turns, list):
+            return None
+        for index, turn in enumerate(turns):
+            if not isinstance(turn, dict) or turn.get("turn_id") != turn_id:
+                continue
+            number = turn.get("turn_number")
+            if isinstance(number, int) and number >= 1:
+                return number
+            return index + 1
+        return None
+
+    def list_turn_numbers(self) -> set[int]:
+        """
+        返回历史中全部轮次的稳定序号。
+
+        用于语音目录清理：历史只保留最近若干轮，序号不连续，必须按
+        集合精确比对而不是按数量推断。
+        """
+        with self._lock:
+            data = self._read_unlocked()
+        turns = data.get("turns")
+        if not isinstance(turns, list):
+            return set()
+        numbers: set[int] = set()
+        for index, turn in enumerate(turns):
+            if not isinstance(turn, dict):
+                continue
+            number = turn.get("turn_number")
+            numbers.add(number if isinstance(number, int) and number >= 1 else index + 1)
+        return numbers
+
     @staticmethod
     def _new_event(
         *,
@@ -233,6 +298,7 @@ class ChatHistoryStore:
                 "schema_version": 1,
                 "max_turns": self.max_turns,
                 "turns": [],
+                "next_turn_number": 1,
             }
 
         try:
@@ -242,6 +308,17 @@ class ChatHistoryStore:
 
         if not isinstance(data, dict) or not isinstance(data.get("turns"), list):
             raise ValueError(f"历史文件结构错误：{self.path}")
+
+        # 兼容旧文件：缺少计数器说明这是未迁移过的历史。此时把所有轮次按
+        # 顺序统一重编号（旧轮次没有 turn_number 字段，只有新轮次才有，
+        # 两者混用会出现"旧第 3 轮"和"新第 3 轮"抢同一个序号的冲突），
+        # 并把计数器指向末尾之后。
+        next_number = data.get("next_turn_number")
+        if not isinstance(next_number, int) or next_number < 1:
+            for index, turn in enumerate(data["turns"], start=1):
+                if isinstance(turn, dict):
+                    turn["turn_number"] = index
+            data["next_turn_number"] = len(data["turns"]) + 1
         return data
 
     def _write_unlocked(self, data: dict[str, Any]) -> None:

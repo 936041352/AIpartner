@@ -28,6 +28,7 @@ from utils.display_state import (
     DisplayQueueOrderError,
 )
 from utils.chat_history import (
+    ChatHistoryStore,
     HistoryCursorError,
     HistoryQueueEmptyError,
     HistoryQueueOrderError,
@@ -345,23 +346,170 @@ def get_character_audio_directory(character_name: str) -> Path:
     return audio_directory
 
 
-def prepare_character_audio_directory(character_name: str) -> Path:
-    """清理角色旧语音，但保留全局最后生成、可能仍在播放的文件。"""
+def get_turn_audio_directory(
+    character_name: str,
+    turn_number: int,
+) -> Path:
+    """
+    返回某一轮次的语音目录：``wavs/<角色>/<轮次序号>/``。
+
+    每轮对话的语音放在以轮次序号命名的独立目录中，段内文件按
+    ``1.wav``、``2.wav`` 顺序编号。
+    """
+    if turn_number < 1:
+        raise ValueError(f"非法轮次序号：{turn_number}")
+    return get_character_audio_directory(character_name) / str(turn_number)
+
+
+def build_turn_audio_filename(sequence: int) -> str:
+    """返回轮次内第 sequence 段语音的文件名。"""
+    if sequence < 1:
+        raise ValueError(f"非法语音段序号：{sequence}")
+    return f"{sequence}.wav"
+
+
+def get_turn_audio_files(
+    character_name: str,
+    turn_number: int,
+) -> list[Path]:
+    """按段序号返回某一轮次的语音文件。"""
+    turn_directory = get_turn_audio_directory(character_name, turn_number)
+    if not turn_directory.is_dir():
+        return []
+
+    def sort_key(path: Path) -> tuple[int, str]:
+        # 1.wav、2.wav …… 10.wav 需要按数值排序而不是字典序。
+        try:
+            return (0, f"{int(path.stem):012d}")
+        except ValueError:
+            return (1, path.name)
+
+    return sorted(
+        (
+            path
+            for path in turn_directory.glob("*.wav")
+            if path.is_file()
+        ),
+        key=sort_key,
+    )
+
+
+def get_history_turn_ids(runtime: CharacterRuntime) -> set[str] | None:
+    """
+    读取当前角色的全部历史轮次 ID。
+
+    返回 ``None`` 表示历史不可用，此时调用方应避免清理语音，以免误删
+    仍然被历史引用的音频。
+    """
+    history_store = runtime.history_store
+    if history_store is None:
+        return None
+    try:
+        return history_store.list_turn_ids()
+    except Exception as error:
+        print(f"[读取对话历史失败] {type(error).__name__}: {error}")
+        return None
+
+
+def get_history_turn_numbers(runtime: CharacterRuntime) -> set[int] | None:
+    """读取历史中仍然有效的轮次序号；历史不可用时返回 None。"""
+    history_store = runtime.history_store
+    if history_store is None:
+        return None
+    try:
+        return history_store.list_turn_numbers()
+    except Exception as error:
+        print(f"[读取对话历史失败] {type(error).__name__}: {error}")
+        return None
+
+
+def get_turn_number(runtime: CharacterRuntime, turn_id: str) -> int | None:
+    """返回轮次序号；历史不可用或轮次不存在时返回 None。"""
+    history_store = runtime.history_store
+    if history_store is None:
+        return None
+    try:
+        return history_store.get_turn_number(turn_id)
+    except Exception as error:
+        print(f"[读取轮次序号失败] {type(error).__name__}: {error}")
+        return None
+
+
+def prepare_character_audio_directory(runtime: CharacterRuntime) -> Path:
+    """
+    清理角色已不再被对话历史引用的语音。
+
+    历史记录支持音频回放，因此不能像以前那样在每轮对话开始时清空整个
+    目录；这里改为只删除历史中已不存在的轮次目录，并额外保护可能仍在
+    播放的最后一次生成文件。旧版本遗留的扁平 ``*.wav`` 也会一并清理。
+    """
+    character_name = runtime.character_name
     audio_directory = get_character_audio_directory(character_name)
     audio_directory.mkdir(parents=True, exist_ok=True)
 
+    known_turn_ids = get_history_turn_ids(runtime)
+    known_turn_numbers = get_history_turn_numbers(runtime)
+    if known_turn_ids is None or known_turn_numbers is None:
+        # 历史不可用时保守处理：不删除任何音频。
+        return audio_directory
+
     with last_tts_generated_lock:
         protected_path = last_tts_generated
+
+        # 旧版本把语音直接放在角色目录下，按轮次 ID 前缀匹配删除。
         for audio_path in audio_directory.glob("*.wav"):
-            if protected_path is not None and audio_path.resolve() == protected_path:
+            turn_id, separator, _ = audio_path.stem.rpartition("_")
+            if separator and turn_id in known_turn_ids:
+                continue
+            if (
+                protected_path is not None
+                and audio_path.resolve() == protected_path
+            ):
                 continue
             try:
                 audio_path.unlink()
             except OSError as error:
-                # 清理失败不应阻断新一轮对话。
                 print(f"[清理角色语音失败] {audio_path}: {error}")
 
+        # 新版本按轮次序号分目录保存。
+        for turn_directory in audio_directory.iterdir():
+            if not turn_directory.is_dir():
+                continue
+            if not turn_directory.name.isdigit():
+                continue
+            if int(turn_directory.name) in known_turn_numbers:
+                continue
+            for audio_path in sorted(turn_directory.glob("*.wav")):
+                if (
+                    protected_path is not None
+                    and audio_path.resolve() == protected_path
+                ):
+                    continue
+                try:
+                    audio_path.unlink()
+                except OSError as error:
+                    print(f"[清理角色语音失败] {audio_path}: {error}")
+            try:
+                turn_directory.rmdir()
+            except OSError:
+                # 目录非空或正被占用时保留，下一轮再试。
+                pass
+
     return audio_directory
+
+
+def build_turn_audio_urls(
+    character_name: str,
+    turn_number: int,
+) -> list[str]:
+    """返回某一轮次全部语音片段的可播放 URL。"""
+    paths = get_turn_audio_files(character_name, turn_number)
+    quoted_character = quote(character_name, safe="")
+    return [
+        f"/wavs/{quoted_character}/{turn_number}/"
+        f"{quote(path.name, safe='')}"
+        for path in paths
+    ]
 
 
 def remember_last_tts_generated(audio_path: Path) -> None:
@@ -486,8 +634,19 @@ def process_display_queue(
     display_enabled: bool,
 ) -> None:
     """按 FIFO 解析模型内嵌的演出标记并逐段生成语音。"""
-    audio_directory = get_character_audio_directory(runtime.character_name)
+    character_name = runtime.character_name
+    turn_number = get_turn_number(runtime, turn_id)
+    audio_directory = get_character_audio_directory(character_name)
     audio_directory.mkdir(parents=True, exist_ok=True)
+    turn_audio_directory = None
+    if turn_number is not None:
+        turn_audio_directory = get_turn_audio_directory(
+            character_name,
+            turn_number,
+        )
+        turn_audio_directory.mkdir(parents=True, exist_ok=True)
+    # 本轮内跨演出分段连续编号：1.wav、2.wav ……
+    speech_sequence = 0
 
     try:
         while True:
@@ -527,9 +686,23 @@ def process_display_queue(
                     plan["character_ref_texts"],
                 ):
                     display_id = uuid4().hex
-                    filename = f"{turn_id}_{display_id}.wav"
-                    output_path = audio_directory / filename
-                    audio_url = None
+                    speech_sequence += 1
+                    if turn_audio_directory is not None:
+                        filename = build_turn_audio_filename(speech_sequence)
+                        output_path = turn_audio_directory / filename
+                        audio_url = (
+                            f"/wavs/{quote(character_name, safe='')}/"
+                            f"{turn_number}/"
+                            f"{quote(filename, safe='')}"
+                        )
+                    else:
+                        # 历史不可用时退化为旧的扁平命名，保证语音仍能生成。
+                        filename = f"{turn_id}_{display_id}.wav"
+                        output_path = audio_directory / filename
+                        audio_url = (
+                            f"/wavs/{quote(character_name, safe='')}/"
+                            f"{quote(filename, safe='')}"
+                        )
                     tts_error = None
 
                     try:
@@ -545,14 +718,10 @@ def process_display_queue(
                                     language=speech_language,
                                 )
                         remember_last_tts_generated(output_path)
-                        audio_url = (
-                            f"/wavs/"
-                            f"{quote(runtime.character_name, safe='')}/"
-                            f"{quote(filename, safe='')}"
-                        )
                     except Exception as error:
                         # 单段语音失败不应中断后续文本和演出。
                         tts_error = f"语音合成失败：{error}"
+                        audio_url = None
 
                     runtime.display_state.append_display(
                         turn_id,
@@ -591,6 +760,10 @@ def complete_reply_in_background(
     turn_id: str,
     memory_state: dict,
     generation_job: GenerationJob,
+    *,
+    history_store: ChatHistoryStore | None = None,
+    history_reply: str | None = None,
+    history_speaker: str | None = None,
 ) -> None:
     """等待演出生产完成，再整理记忆并释放全局生成权。"""
     try:
@@ -599,6 +772,26 @@ def complete_reply_in_background(
             "生成分段语音",
         )
         runtime.display_state.wait_until_worker_finished(turn_id)
+
+        # 角色回复的历史事件在语音全部生成后才入队：这样前端领取到的
+        # 实时事件一定带着音频地址，回放按钮不会时有时无。
+        if (
+            history_store is not None
+            and history_reply
+            and history_speaker
+        ):
+            try:
+                history_store.complete_turn(
+                    turn_id=turn_id,
+                    speaker=history_speaker,
+                    content=history_reply,
+                    completed_at=time(),
+                )
+            except Exception as error:
+                print(
+                    "[对话历史写入失败] "
+                    f"{type(error).__name__}: {error}"
+                )
 
         generation_coordinator.update_stage(
             generation_job.token,
@@ -1115,6 +1308,46 @@ def chat_status(requested_character: str, runtime_id: str):
     )
 
 
+def attach_turn_audio_urls(
+    runtime: CharacterRuntime,
+    turn: dict,
+) -> dict:
+    """
+    为历史轮次中的角色回复补上语音回放地址。
+
+    语音按 ``wavs/<角色>/<轮次序号>/`` 分目录保存，轮次序号即该轮在
+    对话历史中的次序，因此无需额外持久化字段即可定位音频。
+    """
+    turn_id = turn.get("turn_id")
+    if not isinstance(turn_id, str) or not turn_id:
+        return turn
+
+    events = turn.get("events")
+    if not isinstance(events, list):
+        return turn
+
+    turn_number = get_turn_number(runtime, turn_id)
+    if turn_number is None:
+        return turn
+
+    audio_urls = build_turn_audio_urls(
+        runtime.character_name,
+        turn_number,
+    )
+    for event in events:
+        if not isinstance(event, dict):
+            continue
+        if event.get("role") != "assistant":
+            continue
+        error = event.get("error")
+        if isinstance(error, str) and error.strip():
+            continue
+        # 即使音频尚未生成（实时事件早于语音完成）也保留字段，
+        # 前端据此始终显示回放按钮，由服务端在读取时补齐地址。
+        event["audio_urls"] = list(audio_urls)
+    return turn
+
+
 @app.get(
     "/api/characters/{requested_character}/history",
     response_model=ChatHistoryPageResponse,
@@ -1132,9 +1365,41 @@ def get_chat_history(
     if runtime.history_store is None:
         raise HTTPException(status_code=503, detail="对话历史服务不可用。")
     try:
-        return runtime.history_store.get_turns(limit, before_turn_id)
+        page = runtime.history_store.get_turns(limit, before_turn_id)
     except HistoryCursorError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
+
+    for turn in page.get("turns", []):
+        attach_turn_audio_urls(runtime, turn)
+    return page
+
+
+@app.get(
+    "/api/characters/{requested_character}/history/turns/{turn_id}/audio"
+)
+def get_turn_audio(
+    requested_character: str,
+    turn_id: str,
+    runtime_id: str,
+):
+    """
+    返回某一轮次当前的语音地址。
+
+    语音在后台逐段合成，历史事件可能在语音就绪前就已送达前端；
+    前端点击回放按钮时可用该接口按需取回最新地址。
+    """
+    runtime = require_runtime(requested_character, runtime_id)
+    turn_number = get_turn_number(runtime, turn_id)
+    if turn_number is None:
+        raise HTTPException(status_code=404, detail="轮次不存在。")
+    return {
+        "turn_id": turn_id,
+        "turn_number": turn_number,
+        "audio_urls": build_turn_audio_urls(
+            runtime.character_name,
+            turn_number,
+        ),
+    }
 
 
 @app.get(
@@ -1150,11 +1415,24 @@ def get_ready_history_event(
     if runtime.history_store is None:
         raise HTTPException(status_code=503, detail="对话历史服务不可用。")
     try:
-        return runtime.history_store.pop_ready_event(event_id)
+        event = runtime.history_store.pop_ready_event(event_id)
     except HistoryQueueEmptyError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
     except HistoryQueueOrderError as error:
         raise HTTPException(status_code=409, detail=str(error)) from error
+
+    # 让实时渲染的历史消息与分页历史一样带语音回放地址。
+    # 这里始终写入 audio_urls（可能为空列表），前端据此稳定显示回放按钮。
+    if event.get("role") == "assistant":
+        turn_id = event.get("turn_id")
+        if isinstance(turn_id, str) and turn_id:
+            turn_number = get_turn_number(runtime, turn_id)
+            if turn_number is not None:
+                event["audio_urls"] = build_turn_audio_urls(
+                    runtime.character_name,
+                    turn_number,
+                )
+    return event
 
 
 @app.get(
@@ -1366,7 +1644,7 @@ def chat(
                     )
                     history_store = None
 
-            prepare_character_audio_directory(runtime.character_name)
+            prepare_character_audio_directory(runtime)
             input_state = build_input_state(user_text, runtime)
 
             # 固定本轮演出开关，并让对话图能把每次 AI 文本写入队列。
@@ -1409,20 +1687,6 @@ def chat(
                 runtime.display_state.set_final_reply(turn_id, reply)
             runtime.display_state.finish_input(turn_id)
 
-            if history_store is not None:
-                try:
-                    history_store.complete_turn(
-                        turn_id=turn_id,
-                        speaker=runtime.true_character_name,
-                        content=reply,
-                        completed_at=time(),
-                    )
-                except Exception as error:
-                    print(
-                        "[对话历史写入失败] "
-                        f"{type(error).__name__}: {error}"
-                    )
-
             memory_state = deepcopy(reply_state)
             memory_state["memory_consolidating"] = True
             memory_state["memory_consolidation_error"] = None
@@ -1440,6 +1704,9 @@ def chat(
             turn_id,
             memory_state,
             generation_job,
+            history_store=history_store,
+            history_reply=reply,
+            history_speaker=runtime.true_character_name,
         )
         handed_to_background = True
 

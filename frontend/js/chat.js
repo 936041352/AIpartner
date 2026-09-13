@@ -302,6 +302,154 @@ function createHistoryTurnElement(turnId) {
   return turnElement;
 }
 
+// ===== 历史消息语音回放 =====
+// 独立于演出播放器（#audio）：演出播放器由队列状态机驱动，会监听 ended
+// 事件推进下一段演出，复用会破坏那套状态机。
+const historyAudio = new Audio();
+historyAudio.preload = "auto";
+
+let historyAudioState = {
+  button: null,
+  urls: [],
+  index: 0,
+  // 每次开始新的播放序列或停止播放都会自增，用于让仍在异步流程中的
+  // 旧调用自动失效。
+  token: 0,
+};
+
+function setHistoryAudioButtonState(button, state) {
+  if (!button) return;
+  button.dataset.state = state;
+  button.classList.toggle("is-playing", state === "playing");
+  button.classList.toggle("is-loading", state === "loading");
+  button.setAttribute("aria-pressed", String(state === "playing"));
+  const labels = {
+    idle: "播放这句话的语音",
+    loading: "正在准备语音…",
+    playing: "停止播放这句话的语音",
+  };
+  const label = labels[state] || labels.idle;
+  button.title = label;
+  button.setAttribute("aria-label", label);
+}
+
+/** 停止播放并让所有在途调用失效。 */
+function stopHistoryAudio() {
+  const { button } = historyAudioState;
+  historyAudioState.token += 1;
+  historyAudioState.button = null;
+  historyAudioState.urls = [];
+  historyAudioState.index = 0;
+  historyAudio.pause();
+  setHistoryAudioButtonState(button, "idle");
+}
+
+historyAudio.addEventListener("ended", () => {
+  historyAudioState.index += 1;
+  if (historyAudioState.index < historyAudioState.urls.length) {
+    playHistoryAudioChunk(historyAudioState.token);
+    return;
+  }
+  stopHistoryAudio();
+});
+
+historyAudio.addEventListener("error", () => {
+  if (!historyAudioState.button) return;
+  voiceStatus.textContent = "历史语音播放失败。";
+  stopHistoryAudio();
+});
+
+function playHistoryAudioChunk(token) {
+  if (token !== historyAudioState.token) return;
+  const url = historyAudioState.urls[historyAudioState.index];
+  historyAudio.src = url;
+  historyAudio.play().catch((error) => {
+    if (token !== historyAudioState.token) return;
+    voiceStatus.textContent = "播放失败：" + error.message;
+    stopHistoryAudio();
+  });
+}
+
+async function toggleHistoryAudio(button, urls) {
+  // 再点一次同一个按钮 = 停止。
+  if (historyAudioState.button === button) {
+    stopHistoryAudio();
+    return;
+  }
+
+  // 同一时间只允许一个音源发声。
+  stopHistoryAudio();
+  if (!audio.paused) {
+    audio.pause();
+  }
+
+  historyAudioState.button = button;
+  historyAudioState.urls = urls;
+  historyAudioState.index = 0;
+  historyAudioState.token += 1;
+  // 必须在 stopHistoryAudio()/自增之后取 token，否则下面的守卫会误判失效。
+  const token = historyAudioState.token;
+
+  setHistoryAudioButtonState(button, "loading");
+  try {
+    await unlockAudio();
+  } catch (error) {
+    // 解锁失败也要继续尝试播放，由 play() 自己决定是否被拦截。
+  }
+  if (token !== historyAudioState.token) return;
+
+  // 语音可能还在后台合成：此时按钮仍然显示，点击后按需取回地址。
+  let playable = historyAudioState.urls;
+  if (playable.length === 0) {
+    playable = await fetchTurnAudioUrls(button.dataset.turnId);
+    if (token !== historyAudioState.token) return;
+    if (playable.length === 0) {
+      voiceStatus.textContent = "这句的语音还在合成中，请稍后再试。";
+      stopHistoryAudio();
+      return;
+    }
+    historyAudioState.urls = playable;
+  }
+
+  voiceStatus.textContent = "";
+  setHistoryAudioButtonState(button, "playing");
+  playHistoryAudioChunk(token);
+}
+
+/** 语音尚未生成时，按轮次向服务端取回音频地址。 */
+async function fetchTurnAudioUrls(turnId) {
+  if (!turnId) return [];
+  try {
+    const response = await fetch(
+      `/api/characters/${encodedCharacter}/history/turns/` +
+        `${encodeURIComponent(turnId)}/audio?runtime_id=` +
+        encodeURIComponent(runtimeId),
+      { cache: "no-store" },
+    );
+    if (!response.ok) return [];
+    const data = await response.json();
+    return Array.isArray(data.audio_urls)
+      ? data.audio_urls.filter((url) => typeof url === "string" && url)
+      : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function createHistoryAudioButton(urls, turnId) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "history-audio-button";
+  if (turnId) {
+    button.dataset.turnId = turnId;
+  }
+  setHistoryAudioButtonState(button, "idle");
+  button.addEventListener("click", () => {
+    toggleHistoryAudio(button, urls);
+  });
+  return button;
+}
+
 function createHistoryEventElement(event) {
   const row = document.createElement("div");
   const role = ["user", "assistant", "tool"].includes(event.role)
@@ -328,6 +476,17 @@ function createHistoryEventElement(event) {
   speaker.className = "history-speaker";
   speaker.textContent = role === "user" ? "你" : event.speaker || "未知";
   message.appendChild(speaker);
+
+  const audioUrls = Array.isArray(event.audio_urls)
+    ? event.audio_urls.filter((url) => typeof url === "string" && url)
+    : [];
+  // 角色回复始终显示回放按钮：语音可能仍在后台合成，点击时再按需取回。
+  if (role === "assistant") {
+    // 放在 speaker 之后，这样会显示在 ::after 生成的冒号右边。
+    message.appendChild(
+      createHistoryAudioButton(audioUrls, event.turn_id),
+    );
+  }
 
   const content = String(event.content || "");
   const contentElement = document.createElement("span");
@@ -640,6 +799,8 @@ async function fetchReadyDisplay() {
     if (data.audio_url) {
       displayPlaying = true;
       voiceStatus.textContent = "";
+      // 实时演出优先，避免与历史语音同时发声。
+      stopHistoryAudio();
       audio.src = data.audio_url;
       audio.load();
       try {
