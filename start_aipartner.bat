@@ -8,7 +8,7 @@ set "APP_URL=http://127.0.0.1:8000"
 set "CONDA_ENV=aipartner"
 rem Optional: set the full path to conda.exe here. Leave empty for auto-detection.
 rem Example: set "CONDA_EXE=D:\miniconda3\Scripts\conda.exe"
-set "CONDA_EXE="
+set "CONDA_EXE=D:\ProgramData\anaconda3\Scripts\conda.exe"
 
 rem Find Conda only when no manual path is configured.
 if not defined CONDA_EXE if exist "%USERPROFILE%\miniconda3\Scripts\conda.exe" set "CONDA_EXE=%USERPROFILE%\miniconda3\Scripts\conda.exe"
