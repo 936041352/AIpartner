@@ -25,6 +25,7 @@ let currentUserProfileUrl =
 
 const inputBox = document.getElementById("userInput");
 const sendButton = document.getElementById("sendButton");
+const micButton = document.getElementById("micButton");
 const closeCharacterButton = document.getElementById("closeCharacterButton");
 const galModeButton = document.getElementById("galModeButton");
 const textModeButton = document.getElementById("textModeButton");
@@ -264,6 +265,8 @@ function applyControlState() {
   );
   inputBox.disabled = disabled;
   sendButton.disabled = disabled;
+  // 录音过程中不要因为轮询状态变化把麦克风按钮禁用掉。
+  if (micButton) micButton.disabled = disabled || micTranscribing;
   closeCharacterButton.disabled = disabled;
   galModeButton.disabled = disabled;
   textModeButton.disabled = disabled;
@@ -991,6 +994,298 @@ async function setChatMode(mode) {
   }
 }
 
+// ===== 语音输入（浏览器录音 + 服务端 faster-whisper 转写） =====
+const MIC_TARGET_SAMPLE_RATE = 16000; // Whisper 期望 16 kHz 单声道
+const MIC_MAX_SECONDS = 60;
+const MIC_MIN_SECONDS = 0.4;
+
+let micRecorder = null;
+let micStream = null;
+let micChunks = [];
+let micStartedAt = 0;
+let micTimer = null;
+let micTranscribing = false;
+let micAvailable = false;
+
+function setMicButtonState(state) {
+  if (!micButton) return;
+  micButton.dataset.state = state;
+  micButton.disabled = state === "transcribing" || state === "unavailable";
+  const labels = {
+    idle: "语音输入",
+    recording: "停止录音并转写",
+    transcribing: "正在转写语音…",
+    unavailable: "语音输入不可用",
+  };
+  const label = labels[state] || labels.idle;
+  micButton.title = label;
+  micButton.setAttribute("aria-label", label);
+  micButton.setAttribute("aria-pressed", String(state === "recording"));
+}
+
+function formatMicElapsed(seconds) {
+  const total = Math.max(0, Math.floor(seconds));
+  return `${String(Math.floor(total / 60)).padStart(2, "0")}:${String(total % 60).padStart(2, "0")}`;
+}
+
+function updateMicHint() {
+  if (!micAvailable) return;
+  if (micRecorder && micRecorder.state === "recording") {
+    const elapsed = (Date.now() - micStartedAt) / 1000;
+    voiceStatus.textContent = `录音中 ${formatMicElapsed(elapsed)}，再次点击麦克风结束`;
+  }
+}
+
+/** 把任意采样率的 Float32 单声道数据线性重采样到目标采样率。 */
+function resampleToTarget(samples, sourceRate, targetRate) {
+  if (sourceRate === targetRate) return samples;
+  const ratio = sourceRate / targetRate;
+  const length = Math.floor(samples.length / ratio);
+  const result = new Float32Array(length);
+  for (let i = 0; i < length; i += 1) {
+    const position = i * ratio;
+    const index = Math.floor(position);
+    const fraction = position - index;
+    const next = Math.min(index + 1, samples.length - 1);
+    result[i] = samples[index] * (1 - fraction) + samples[next] * fraction;
+  }
+  return result;
+}
+
+/** 把录音数据解码成 16 kHz 单声道 WAV（服务端无需额外解码器）。 */
+async function encodeRecordingToWav(chunks, mimeType) {
+  const blob = new Blob(chunks, { type: mimeType });
+  const arrayBuffer = await blob.arrayBuffer();
+
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  const context = new AudioContextClass();
+  let decoded;
+  try {
+    decoded = await context.decodeAudioData(arrayBuffer.slice(0));
+  } finally {
+    context.close().catch(() => {});
+  }
+
+  // 多声道时取平均，得到单声道
+  let monoSamples;
+  if (decoded.numberOfChannels > 1) {
+    monoSamples = new Float32Array(decoded.length);
+    for (let channel = 0; channel < decoded.numberOfChannels; channel += 1) {
+      const data = decoded.getChannelData(channel);
+      for (let i = 0; i < data.length; i += 1) monoSamples[i] += data[i];
+    }
+    for (let i = 0; i < monoSamples.length; i += 1) {
+      monoSamples[i] /= decoded.numberOfChannels;
+    }
+  } else {
+    monoSamples = decoded.getChannelData(0);
+  }
+
+  const samples = resampleToTarget(
+    monoSamples,
+    decoded.sampleRate,
+    MIC_TARGET_SAMPLE_RATE,
+  );
+
+  const buffer = new ArrayBuffer(44 + samples.length * 2);
+  const view = new DataView(buffer);
+  const writeAscii = (offset, text) => {
+    for (let i = 0; i < text.length; i += 1) {
+      view.setUint8(offset + i, text.charCodeAt(i));
+    }
+  };
+  writeAscii(0, "RIFF");
+  view.setUint32(4, 36 + samples.length * 2, true);
+  writeAscii(8, "WAVE");
+  writeAscii(12, "fmt ");
+  view.setUint32(16, 16, true);
+  view.setUint16(20, 1, true);                                  // PCM
+  view.setUint16(22, 1, true);                                  // 单声道
+  view.setUint32(24, MIC_TARGET_SAMPLE_RATE, true);
+  view.setUint32(28, MIC_TARGET_SAMPLE_RATE * 2, true);         // 字节率
+  view.setUint16(32, 2, true);                                  // 块对齐
+  view.setUint16(34, 16, true);                                 // 位深
+  writeAscii(36, "data");
+  view.setUint32(40, samples.length * 2, true);
+  for (let i = 0; i < samples.length; i += 1) {
+    const clamped = Math.max(-1, Math.min(1, samples[i]));
+    view.setInt16(44 + i * 2, clamped < 0 ? clamped * 0x8000 : clamped * 0x7fff, true);
+  }
+  return new Blob([view], { type: "audio/wav" });
+}
+
+function releaseMicStream() {
+  if (micStream) {
+    micStream.getTracks().forEach((track) => track.stop());
+    micStream = null;
+  }
+  if (micTimer) {
+    clearInterval(micTimer);
+    micTimer = null;
+  }
+}
+
+async function startMicRecording() {
+  const AudioContextClass = window.AudioContext || window.webkitAudioContext;
+  if (!AudioContextClass || !navigator.mediaDevices?.getUserMedia) {
+    micAvailable = false;
+    setMicButtonState("unavailable");
+    voiceStatus.textContent = "当前浏览器不支持录音，或页面未在安全上下文中打开。";
+    return;
+  }
+
+  try {
+    micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+  } catch (error) {
+    voiceStatus.textContent = `无法访问麦克风：${error.message}`;
+    setMicButtonState("idle");
+    return;
+  }
+
+  const preferredTypes = [
+    "audio/webm;codecs=opus",
+    "audio/webm",
+    "audio/ogg;codecs=opus",
+    "audio/mp4",
+  ];
+  const supportedType = preferredTypes.find((type) => {
+    try {
+      return window.MediaRecorder?.isTypeSupported?.(type);
+    } catch (error) {
+      return false;
+    }
+  });
+
+  try {
+    micRecorder = supportedType
+      ? new MediaRecorder(micStream, { mimeType: supportedType })
+      : new MediaRecorder(micStream);
+  } catch (error) {
+    releaseMicStream();
+    voiceStatus.textContent = `无法开始录音：${error.message}`;
+    setMicButtonState("idle");
+    return;
+  }
+
+  micChunks = [];
+  micStartedAt = Date.now();
+  micRecorder.addEventListener("dataavailable", (event) => {
+    if (event.data && event.data.size > 0) micChunks.push(event.data);
+  });
+  micRecorder.addEventListener("stop", () => {
+    transcribeMicRecording().catch((error) => {
+      voiceStatus.textContent = `语音转写失败：${error.message}`;
+      setMicButtonState("idle");
+    });
+  });
+
+  voiceStatus.textContent = "";
+  micRecorder.start();
+  setMicButtonState("recording");
+  updateMicHint();
+  micTimer = setInterval(() => {
+    updateMicHint();
+    if ((Date.now() - micStartedAt) / 1000 >= MIC_MAX_SECONDS) {
+      stopMicRecording();
+    }
+  }, 500);
+}
+
+function stopMicRecording() {
+  if (micTimer) {
+    clearInterval(micTimer);
+    micTimer = null;
+  }
+  if (micRecorder && micRecorder.state === "recording") {
+    micRecorder.stop();
+  }
+  releaseMicStream();
+}
+
+async function transcribeMicRecording() {
+  const elapsed = (Date.now() - micStartedAt) / 1000;
+  const chunks = micChunks;
+  const mimeType = micRecorder?.mimeType || "audio/webm";
+  micChunks = [];
+
+  if (elapsed < MIC_MIN_SECONDS || chunks.length === 0) {
+    voiceStatus.textContent = "录音太短了，请再说一次。";
+    setMicButtonState("idle");
+    return;
+  }
+
+  micTranscribing = true;
+  setMicButtonState("transcribing");
+  voiceStatus.textContent = "正在识别语音…";
+
+  try {
+    const wavBlob = await encodeRecordingToWav(chunks, mimeType);
+    const formData = new FormData();
+    formData.append("file", wavBlob, "speech.wav");
+
+    const response = await fetch(
+      `/api/asr/transcribe?runtime_id=${encodeURIComponent(runtimeId)}`,
+      { method: "POST", body: formData },
+    );
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(getErrorMessage(data, "语音识别失败。"));
+    }
+
+    const text = String(data.text || "").trim();
+    if (!text) {
+      voiceStatus.textContent = "没有识别到内容，请再说一次。";
+      return;
+    }
+
+    // 追加到输入框，方便用户接着补充或修改后再发送。
+    const existing = inputBox.value.trim();
+    inputBox.value = existing ? `${existing} ${text}` : text;
+    inputBox.focus();
+    voiceStatus.textContent = "";
+  } catch (error) {
+    voiceStatus.textContent = `语音识别失败：${error.message}`;
+  } finally {
+    micTranscribing = false;
+    setMicButtonState("idle");
+  }
+}
+
+function handleMicClick() {
+  if (micTranscribing) return;
+  if (micRecorder && micRecorder.state === "recording") {
+    stopMicRecording();
+    return;
+  }
+  startMicRecording().catch((error) => {
+    voiceStatus.textContent = `录音失败：${error.message}`;
+    setMicButtonState("idle");
+  });
+}
+
+async function initMicButton() {
+  if (!micButton) return;
+  const secureContext = window.isSecureContext ?? (
+    location.protocol === "https:" ||
+    ["localhost", "127.0.0.1", "[::1]"].includes(location.hostname)
+  );
+  if (!secureContext || !navigator.mediaDevices?.getUserMedia) {
+    return; // 不显示按钮
+  }
+
+  try {
+    const response = await fetch("/api/asr/status", { cache: "no-store" });
+    if (!response.ok) return;
+    const data = await response.json();
+    if (!data.available) return;
+    micAvailable = true;
+    micButton.hidden = false;
+    setMicButtonState("idle");
+  } catch (error) {
+    // 探测失败时静默隐藏，不影响文本输入
+  }
+}
+
 async function sendMessage() {
   const message = inputBox.value.trim();
   if (!message) return;
@@ -1061,6 +1356,8 @@ async function finishCurrentDisplay(event) {
 }
 
 sendButton.addEventListener("click", sendMessage);
+micButton.addEventListener("click", handleMicClick);
+initMicButton();
 closeCharacterButton.addEventListener("click", closeCharacter);
 galModeButton.addEventListener("click", () => setChatMode("gal_chat"));
 textModeButton.addEventListener("click", () => setChatMode("text_chat"));

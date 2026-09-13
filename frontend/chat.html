@@ -1,4 +1,4 @@
-﻿<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
   <head>
     <meta charset="UTF-8" />
@@ -179,6 +179,20 @@
     <div class="chat-composer">
       <label for="userInput">输入消息：</label>
       <input id="userInput" type="text" placeholder="输入你想说的话……" />
+      <button
+        id="micButton"
+        class="mic-button"
+        type="button"
+        hidden
+        aria-label="语音输入"
+        title="语音输入"
+      >
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M12 3a3 3 0 0 0-3 3v6a3 3 0 0 0 6 0V6a3 3 0 0 0-3-3z" />
+          <path d="M5 11a7 7 0 0 0 14 0" />
+          <path d="M12 18v3" />
+        </svg>
+      </button>
       <button id="sendButton" type="button">发送</button>
     </div>
 
@@ -190,6 +204,6 @@
     <script src="/static/js/gal-chat.js?v=20260821-1"></script>
     <script src="/static/js/chat-theme.js?v=20260821-1"></script>
     <script src="/static/js/portrait-layout.js?v=20260825-1"></script>
-    <script src="/static/js/chat.js?v=20260828-1"></script>
+    <script src="/static/js/chat.js?v=20260913-1"></script>
   </body>
 </html>

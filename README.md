@@ -265,6 +265,12 @@ BAIDU_API_KEY=""
 # 可选：智谱搜索参数；不填写时使用项目默认值
 # ZHIPU_SEARCH_MODEL="glm-4.7-flashx"
 # ZHIPU_SEARCH_ENGINE="search_pro"
+
+# 可选：语音输入（ASR）；不配置时网页不显示麦克风按钮
+# 注意：Windows 路径必须用单引号，双引号里的 \v 会被当成转义字符
+ASR_MODEL_DIR='F:\Program Files\voice_program\models\models--mobiuslabsgmbh--faster-whisper-large-v3-turbo'
+ASR_DEVICE="cpu"
+ASR_LANGUAGE="zh"
 ```
 
 注意：
@@ -272,6 +278,19 @@ BAIDU_API_KEY=""
 - `LLM_API_KEY`、`LLM_MODEL_ID` 和 `LLM_BASE_URL` 是正常对话所必需的。
 - 模型接口需要兼容本项目使用的 OpenAI 风格调用和 `thinking` 扩展参数；不同服务商的模型名、Base URL 和兼容程度可能不同，请以服务商文档为准。
 - `ZHIPU_API_KEY` 与 `BAIDU_API_KEY` 仅用于实时场景下的联网搜索；不使用搜索时可以留空。
+- `ASR_MODEL_DIR` 指向 faster-whisper（CTranslate2 格式）模型目录，目录内需包含 `model.bin` 与 `config.json`。可用 `modelscope download --model mobiuslabsgmbh/faster-whisper-large-v3-turbo` 或从 Hugging Face 获取。
+- `ASR_LANGUAGE` 默认 `zh`。留空字符串表示自动检测语言，会多一次编码器前向，识别明显变慢。
+- `ASR_DEVICE` 默认 `cpu`：显卡需要留给语音合成，CPU 推理也避免 CUDA 运行时缺失的问题。
+
+## 语音输入（麦克风）
+
+配置好 `ASR_MODEL_DIR` 后，聊天页输入框右侧会出现麦克风按钮：
+
+- 点击开始录音，再次点击结束并自动转写，识别结果会追加到输入框，可修改后再发送。
+- 录音在浏览器内转为 16 kHz 单声道 WAV 后上传，服务端用 faster-whisper 本地转写，不联网、不经过第三方服务。
+- 首次选择角色时会在后台预热模型，避免第一次点击麦克风时长时间等待。
+- 单次录音上限 60 秒。若浏览器未授权麦克风权限，或页面不在安全上下文（`localhost`／`127.0.0.1`／HTTPS）中，麦克风按钮不会显示。
+- 未安装 `faster-whisper` 或模型路径无效时，该按钮同样不会出现，不影响文本输入。
 
 关于API的申请和详细使用方式，请参考 [`使用指南/如何申请API.md`](使用指南/如何申请API.md)
 

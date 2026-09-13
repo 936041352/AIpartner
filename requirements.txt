@@ -19,4 +19,6 @@ huggingface-hub==0.36.2
 torchaudio
 python-dotenv==1.2.2
 requests==2.34.2
+# 语音输入（ASR）：本地 faster-whisper 转写
+faster-whisper==1.2.1
 

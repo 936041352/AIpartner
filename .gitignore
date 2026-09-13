@@ -42,6 +42,7 @@ characters/*/ref_audios/description_rectified.txt
 # Runtime logs and temporary/backup files
 logs/
 _env_backup/
+asr_tmp/
 *.log
 *.tmp
 *.bak

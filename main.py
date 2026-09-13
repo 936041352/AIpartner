@@ -1,12 +1,21 @@
 from copy import deepcopy
 from pathlib import Path
+from tempfile import NamedTemporaryFile
 from threading import Lock, Thread
 from time import time
 from typing import Literal
 from urllib.parse import quote
 from uuid import uuid4
 
-from fastapi import BackgroundTasks, FastAPI, HTTPException, Request
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    File,
+    HTTPException,
+    Request,
+    UploadFile,
+)
+from fastapi.concurrency import run_in_threadpool
 from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from langchain_core.messages import AIMessage, HumanMessage
@@ -58,6 +67,7 @@ from utils.character_groups import (
     CharacterGroupStore,
 )
 from utils.character_setting import read_character_setting
+from utils import asr as asr_module
 
 app = FastAPI()
 
@@ -67,6 +77,12 @@ FRONTEND_DIR = BASE_DIR / "frontend"
 WAV_DIR.mkdir(parents=True, exist_ok=True)
 app.mount("/wavs", StaticFiles(directory=WAV_DIR), name="wavs")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
+
+# 语音输入（ASR）：录音临时目录与上传限制
+ASR_TEMP_DIR = BASE_DIR / "asr_tmp"
+ASR_TEMP_DIR.mkdir(parents=True, exist_ok=True)
+ALLOWED_ASR_SUFFIXES = {".wav", ".webm", ".ogg", ".mp3", ".m4a", ".mp4", ".flac"}
+MAX_ASR_UPLOAD_BYTES = 25 * 1024 * 1024
 
 character_manager = CharacterManager(BASE_DIR)
 character_group_store = CharacterGroupStore(character_manager.characters_dir)
@@ -83,6 +99,23 @@ last_tts_generated_lock = Lock()
 class ChatRequest(BaseModel):
     message: str
     runtime_id: str
+
+
+# 语音识别状态（前端据此决定是否显示麦克风）
+class ASRStatusResponse(BaseModel):
+    available: bool
+    loaded: bool
+    model_dir: str | None = None
+    device: str = "cpu"
+    error: str | None = None
+
+
+# 语音识别结果
+class ASRTranscribeResponse(BaseModel):
+    text: str
+    language: str | None = None
+    language_probability: float | None = None
+    duration: float | None = None
 
 
 # chat函数的输出格式
@@ -1215,6 +1248,15 @@ def update_portrait_layout(
 def select_character(requested_character: str):
     """重新读取角色资源并初始化独立运行时。"""
     runtime = initialize_character_runtime(requested_character)
+
+    # 语音识别模型只在首次使用时加载；趁用户阅读/打字时后台预热，
+    # 避免点击麦克风时长时间等待。失败不影响正常对话。
+    Thread(
+        target=asr_module.warmup,
+        name="asr-warmup",
+        daemon=True,
+    ).start()
+
     return CharacterSelectResponse(
         character=requested_character,
         chat_url=(
@@ -1223,6 +1265,82 @@ def select_character(requested_character: str):
             f"&display_name={quote(runtime.true_character_name, safe='')}"
         ),
     )
+
+
+@app.get(
+    "/api/asr/status",
+    response_model=ASRStatusResponse,
+)
+def get_asr_status():
+    """返回语音输入是否可用，供前端决定是否显示麦克风按钮。"""
+    return ASRStatusResponse(**asr_module.describe())
+
+
+@app.post(
+    "/api/asr/transcribe",
+    response_model=ASRTranscribeResponse,
+)
+async def transcribe_audio(
+    runtime_id: str,
+    file: UploadFile = File(...),
+    language: str | None = None,
+):
+    """
+    把浏览器录制的语音转写成文本。
+
+    音频体积有上限，避免异常请求占用过多内存与磁盘。
+    """
+    if not runtime_id.strip():
+        raise HTTPException(status_code=422, detail="缺少角色运行时标识。")
+
+    suffix = Path(file.filename or "speech.wav").suffix.lower() or ".wav"
+    if suffix not in ALLOWED_ASR_SUFFIXES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"不支持的音频格式：{suffix}",
+        )
+
+    payload = await file.read()
+    if not payload:
+        raise HTTPException(status_code=400, detail="收到的音频为空。")
+    if len(payload) > MAX_ASR_UPLOAD_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=(
+                "录音过长或体积过大，请控制在 "
+                f"{MAX_ASR_UPLOAD_BYTES // (1024 * 1024)} MB 以内。"
+            ),
+        )
+
+    temporary_path: Path | None = None
+    try:
+        with NamedTemporaryFile(
+            suffix=suffix,
+            prefix="asr-",
+            dir=ASR_TEMP_DIR,
+            delete=False,
+        ) as handle:
+            handle.write(payload)
+            temporary_path = Path(handle.name)
+
+        try:
+            result = await run_in_threadpool(
+                asr_module.transcribe,
+                temporary_path,
+                language=language,
+            )
+        except asr_module.ASRUnavailableError as error:
+            raise HTTPException(status_code=503, detail=str(error)) from error
+        except asr_module.ASRTranscribeError as error:
+            raise HTTPException(status_code=500, detail=str(error)) from error
+
+        return ASRTranscribeResponse(**result)
+    finally:
+        if temporary_path is not None:
+            try:
+                temporary_path.unlink()
+            except OSError:
+                pass
 
 
 @app.delete(

@@ -367,6 +367,71 @@ body[data-chat-mode="text_chat"] #portraitLayoutButton {
   padding: 0.55rem 0.8rem;
 }
 
+/* 语音输入按钮 */
+.mic-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--theme-border);
+  border-radius: 0.5rem;
+  color: var(--theme-accent);
+  background: var(--theme-surface);
+  cursor: pointer;
+  transition: color 0.15s ease, border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+.mic-button[hidden] {
+  display: none;
+}
+
+.mic-button svg {
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.mic-button:not(:disabled):hover {
+  border-color: var(--theme-accent);
+}
+
+.mic-button:focus-visible {
+  outline: 2px solid var(--theme-accent);
+  outline-offset: 1px;
+}
+
+.mic-button[data-state="recording"] {
+  color: #fff;
+  border-color: #d64545;
+  background: #d64545;
+  animation: mic-recording-pulse 1.2s ease-in-out infinite;
+}
+
+.mic-button[data-state="transcribing"] {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.mic-button[data-state="unavailable"] {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+@keyframes mic-recording-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mic-button[data-state="recording"] {
+    animation: none;
+  }
+}
+
 #portrait {
   display: block;
   max-width: 100%;
